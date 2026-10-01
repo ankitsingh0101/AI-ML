@@ -1,0 +1,54 @@
+# .gitignore — AI Object Detection Project
+
+# -- Python ------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+*.spec
+
+# -- Virtual environments -----------------------------------------
+venv/
+.venv/
+env/
+.env/
+
+# -- Dataset (too large for git) ----------------------------------
+dataset/images/
+dataset/labels/
+dataset/fiftyone_cache/
+dataset/_stage/
+
+# Keep the data.yaml template
+!dataset/data.yaml
+
+# -- Trained model weights -----------------------------------------
+models/*.pt
+outputs/training/
+outputs/evaluation/
+outputs/detections/
+
+# -- Ultralytics cache --------------------------------------------
+runs/
+*.cache
+*.npy
+
+# -- Jupyter / IDE ------------------------------------------------
+.ipynb_checkpoints/
+*.ipynb
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# -- Logs ---------------------------------------------------------
+*.log
+logs/
