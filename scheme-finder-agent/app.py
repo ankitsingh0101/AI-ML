@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import base64
 import json
+import zlib
 
 import streamlit as st
-import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
 import agent as ag
@@ -30,106 +30,71 @@ st.set_page_config(
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
-# localStorage persistence helpers
+# Query-param persistence helpers
+#
+# Session data is stored in the URL query param ?_sfa=<compressed-base64-json>.
+# On every save, st.query_params is updated directly from Python — no JS needed.
+# On refresh the browser resends the same URL, so the query param is present and
+# Python hydrates session_state before _init_state runs.
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Keys that are cheap to serialise and worth persisting across refreshes.
-# (We skip "schemes" — always re-loaded from disk, and "profile_complete" —
-#  derived at runtime.)
 _PERSIST_KEYS = [
     "language", "profile", "messages",
     "match_results", "greeted", "scheme_of_day_shown", "last_asked_field",
 ]
-_LS_KEY = "sfa_session"   # localStorage key name
-_QP_KEY = "_sfa"          # query-param key used as the restore bridge
+_QP_KEY = "_sfa"
+
+
+def _encode_session(payload: dict) -> str:
+    """JSON → zlib-compress → base64url (URL-safe, no padding issues)."""
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+    compressed = zlib.compress(raw, level=6)
+    return base64.urlsafe_b64encode(compressed).decode()
+
+
+def _decode_session(encoded: str) -> dict:
+    compressed = base64.urlsafe_b64decode(encoded.encode() + b"==")
+    raw = zlib.decompress(compressed)
+    return json.loads(raw.decode())
 
 
 def _save_to_storage() -> None:
-    """Serialise the current session into browser localStorage (0-height iframe)."""
+    """Persist current session into the URL query param."""
     payload = {}
     for k in _PERSIST_KEYS:
         v = st.session_state.get(k)
         if v is not None:
             payload[k] = v
-    json_str = json.dumps(payload, ensure_ascii=False)
-    # Escape backticks so the string can be embedded in a JS template literal
-    json_escaped = json_str.replace("\\", "\\\\").replace("`", "\\`")
-    components.html(
-        f"""<script>
-        try {{ localStorage.setItem('{_LS_KEY}', `{json_escaped}`); }}
-        catch(e) {{}}
-        </script>""",
-        height=0,
-    )
+    if payload:
+        st.query_params[_QP_KEY] = _encode_session(payload)
 
 
 def _clear_storage() -> None:
-    """Wipe the localStorage entry (called on Restart Conversation)."""
-    components.html(
-        f"""<script>
-        try {{ localStorage.removeItem('{_LS_KEY}'); }}
-        catch(e) {{}}
-        </script>""",
-        height=0,
-    )
+    """Remove the session query param (called on Restart Conversation)."""
+    if _QP_KEY in st.query_params:
+        del st.query_params[_QP_KEY]
 
 
 def _maybe_restore_from_storage() -> None:
-    """
-    Two-phase restore via query params (the only synchronous bridge between
-    browser JS and Streamlit Python on a page load):
-
-    Phase A — first load, no query param yet:
-        Inject a JS snippet that reads localStorage and, if data exists,
-        rewrites the URL to add  ?_sfa=<base64json>  then triggers a reload.
-
-    Phase B — reloaded with query param:
-        Python reads st.query_params[_QP_KEY], deserialises, hydrates
-        st.session_state, then removes the query param (clean URL).
-    """
-    # ── Phase B: query param present → hydrate and remove ────────────────────
+    """On page load, if the query param is present, hydrate session_state from it."""
     raw_qp = st.query_params.get(_QP_KEY, "")
-    if raw_qp:
-        try:
-            restored = json.loads(base64.b64decode(raw_qp.encode()).decode())
-            for k in _PERSIST_KEYS:
-                if k in restored:
-                    st.session_state[k] = restored[k]
-        except Exception:
-            pass  # corrupted storage — ignore, fresh start
-        # Remove the query param so it doesn't persist in the URL
-        del st.query_params[_QP_KEY]
-        return  # session_state is now hydrated; _init_state fills gaps below
-
-    # ── Phase A: no query param yet → ask JS to check localStorage ───────────
-    # Only inject the JS bridge once per browser session (track with a flag).
-    if st.session_state.get("_storage_checked"):
+    if not raw_qp:
         return
-    st.session_state["_storage_checked"] = True
-
-    components.html(
-        f"""<script>
-        (function() {{
-            try {{
-                var raw = localStorage.getItem('{_LS_KEY}');
-                if (!raw) return;
-                // base64-encode so it survives URL encoding intact
-                var b64 = btoa(unescape(encodeURIComponent(raw)));
-                var url = new URL(window.parent.location.href);
-                url.searchParams.set('{_QP_KEY}', b64);
-                window.parent.location.replace(url.toString());
-            }} catch(e) {{}}
-        }})();
-        </script>""",
-        height=0,
-    )
+    try:
+        restored = _decode_session(raw_qp)
+        for k in _PERSIST_KEYS:
+            if k in restored:
+                st.session_state[k] = restored[k]
+    except Exception:
+        # Corrupted or outdated param — wipe it and start fresh
+        del st.query_params[_QP_KEY]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Session state initialisation
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Attempt to restore from browser localStorage BEFORE _init_state so that
+# Restore from URL query param BEFORE _init_state so that
 # restored values are not overwritten by the defaults.
 _maybe_restore_from_storage()
 
@@ -164,8 +129,7 @@ def _add_message(role: str, content: str) -> None:
 
 def _reset() -> None:
     for key in ["profile", "messages", "match_results", "greeted",
-                "profile_complete", "scheme_of_day_shown", "last_asked_field",
-                "_storage_checked"]:
+                "profile_complete", "scheme_of_day_shown", "last_asked_field"]:
         if key in st.session_state:
             del st.session_state[key]
     _clear_storage()
