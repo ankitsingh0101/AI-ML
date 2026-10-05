@@ -2,7 +2,7 @@
 llm.py — Provider-agnostic LLM wrapper.
 
 Reads LLM_PROVIDER from .env (default: "openai").
-Supports: openai, gemini, anthropic.
+Supports: openai, gemini, anthropic, groq.
 
 Usage:
     from llm import chat_completion
@@ -54,10 +54,12 @@ def chat_completion(
         return _gemini(messages, system_prompt, temperature, max_tokens)
     elif LLM_PROVIDER == "anthropic":
         return _anthropic(messages, system_prompt, temperature, max_tokens)
+    elif LLM_PROVIDER == "groq":
+        return _groq(messages, system_prompt, temperature, max_tokens)
     else:
         raise ValueError(
             f"Unknown LLM_PROVIDER '{LLM_PROVIDER}'. "
-            "Choose from: openai, gemini, anthropic."
+            "Choose from: openai, gemini, anthropic, groq."
         )
 
 
@@ -169,3 +171,36 @@ def _anthropic(
         return response.content[0].text.strip()
     except Exception as exc:
         raise RuntimeError(f"Anthropic API error: {exc}") from exc
+
+
+def _groq(
+    messages: list[dict],
+    system_prompt: str,
+    temperature: float,
+    max_tokens: int,
+) -> str:
+    try:
+        from groq import Groq
+    except ImportError as exc:
+        raise ImportError(
+            "groq package not installed. Run: pip install groq"
+        ) from exc
+
+    model = LLM_MODEL or "llama3-8b-8192"
+    client = Groq(api_key=LLM_API_KEY)
+
+    full_messages = []
+    if system_prompt:
+        full_messages.append({"role": "system", "content": system_prompt})
+    full_messages.extend(messages)
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=full_messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as exc:
+        raise RuntimeError(f"Groq API error: {exc}") from exc

@@ -42,88 +42,59 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 
 ## 📸 Screenshots
 
-### 1 · Welcome & Language Selection
+### 1 · Welcome Screen — Scheme of the Day + Greeting
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🇮🇳  Scheme Finder — SDG 1: No Poverty          [sidebar ▶] │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ 🤖  Namaste! 🙏 I am the Scheme Finder — here to   │   │
-│  │     help you find government welfare schemes you    │   │
-│  │     may be eligible for.                           │   │
-│  │     Would you like to continue in English or Hindi? │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  Type your message...                          [Send] │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ⚠️  Do NOT share Aadhaar, bank details or phone numbers.  │
-└─────────────────────────────────────────────────────────────┘
-```
+> The app opens with a collapsible **Scheme of the Day** card and a warm Namaste greeting. Users are immediately asked for their preferred language — no sign-up, no forms.
 
-### 2 · Profile Collection (Conversational)
+![Welcome screen showing Scheme of the Day and Namaste greeting](screenshots/Screenshot%202026-10-05%20201908.png)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Chat                          │  📋 Your Profile           │
-│                                │  ─────────────────────     │
-│  👤 English please             │  State      Madhya Pradesh │
-│                                │  Age        45             │
-│  🤖 Which state do you live in?│  Occupation Farmer         │
-│                                │  Income     ₹80,000 / yr   │
-│  👤 Madhya Pradesh             │  Category   OBC            │
-│                                │  BPL card   No             │
-│  🤖 How old are you?           │                            │
-│                                │  Progress: ████████░░ 80%  │
-│  👤 45                         │                            │
-│                                │                            │
-│  🤖 What is your occupation?   │                            │
-└─────────────────────────────────────────────────────────────┘
-```
+---
 
-### 3 · Matched Schemes — Results View
+### 2 · Conversational Profile Collection — State & Age
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  🎉 Found 4 schemes you are eligible for!                   │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ ✅  PM-KISAN                          Agriculture   │   │
-│  │     ₹6,000/year in 3 instalments directly to your  │   │
-│  │     bank account.                                   │   │
-│  │     [ 📄 Documents needed ▼ ]  [ 🌐 Apply online ] │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ ✅  e-Shram Card                          Labour    │   │
-│  │     ₹2 lakh accident insurance + social security    │   │
-│  │     [ 📄 Documents needed ▼ ]  [ 🌐 Apply online ] │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ ✅  PM Jan Dhan Yojana        Financial Inclusion   │   │
-│  │     Zero-balance account + ₹10,000 overdraft        │   │
-│  │     [ 📄 Documents needed ▼ ]  [ 🌐 Apply online ] │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
+> The agent collects the user's state and age through natural chat. The **"Your Profile So Far"** sidebar updates live with every confirmed answer.
 
-### 4 · Document Checklist (Follow-up Q&A)
+![Profile collection — language, state and age](screenshots/Screenshot%202026-10-05%20202046.png)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  👤  What documents do I need for PM-KISAN?                 │
-│                                                             │
-│  🤖  For PM-KISAN you will need:                           │
-│       • Aadhaar card                                       │
-│       • Land ownership documents (Khasra / Khatauni)       │
-│       • Bank account passbook                              │
-│       • Mobile number linked to Aadhaar                    │
-│                                                             │
-│       You can apply at pmkisan.gov.in or your nearest CSC. │
-└─────────────────────────────────────────────────────────────┘
-```
+---
+
+### 3 · Profile Collection — Gender, Occupation & Income
+
+> Collection continues through gender, occupation, and income. As soon as enough fields are known the agent announces how many schemes matched.
+
+![Profile collection — gender, occupation and income](screenshots/Screenshot%202026-10-05%20202100.png)
+
+---
+
+### 4 · Matched Schemes — Full Results View
+
+> The full results page: a green **"You are eligible"** banner lists confirmed schemes, and a blue **"need more info"** section shows maybes — all as expandable cards.
+
+![Full results view with eligible and maybe scheme cards](screenshots/Screenshot%202026-10-05%20202110.png)
+
+---
+
+### 5 · Scheme Detail — Documents & Apply
+
+> Expanding any card reveals the full description, **why you qualify**, a documents checklist, how to apply step-by-step, and an **Apply Here** button linking to the official portal.
+
+![Expanded PM Jan Dhan card with documents and Apply Here button](screenshots/Screenshot%202026-10-05%20202204.png)
+
+---
+
+### 6 · Streamlit Cloud Deployment — App Config
+
+> The app is deployed on Streamlit Community Cloud from the `ankitsingh0101/AI-ML` repository, pointing to `scheme-finder-agent/app.py` on the `main` branch.
+
+![Streamlit Cloud deploy configuration screen](screenshots/Screenshot%202026-10-05%20201014.png)
+
+---
+
+### 7 · Streamlit Cloud — Secrets Configuration
+
+> LLM API keys are stored as encrypted **Secrets** in TOML format via Streamlit Cloud's Advanced Settings — never hardcoded or committed to the repo.
+
+![Streamlit Cloud advanced settings and secrets](screenshots/Screenshot%202026-10-05%20201058.png)
 
 ---
 
@@ -227,6 +198,7 @@ Supported providers:
 | OpenAI | `openai` | `gpt-4o-mini` |
 | Google Gemini | `gemini` | `gemini-1.5-flash` |
 | Anthropic | `anthropic` | `claude-3-haiku-20240307` |
+| Groq ⚡ | `groq` | `llama3-8b-8192` |
 
 ### 5 · Run the app
 
