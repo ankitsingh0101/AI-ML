@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&family=Noto+Sans:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fbf7ee;--ink:#1d2b2a;--teal:#0f6b63;--teal-d:#0a4d47;--rose:#b3361f;--line:#d9d0bb;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans Devanagari","Noto Sans",system-ui,sans-serif;font-size:20px;line-height:1.6}
+main{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:32px;margin:8px 0 4px}
+p.sub{margin:0 0 20px;color:#4b5a58}
+label{display:block;font-weight:700;margin:18px 0 6px}
+select,textarea{width:100%;font:inherit;padding:14px;border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
+textarea{min-height:110px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+button,.file{font:inherit;font-weight:700;padding:16px 18px;border-radius:12px;border:0;cursor:pointer;flex:1 1 200px;text-align:center}
+.go{background:var(--teal);color:#fff}.go:hover{background:var(--teal-d)}
+.scam{background:var(--rose);color:#fff}
+.file{background:var(--card);border:2px dashed var(--teal);color:var(--teal-d)}
+.file input{display:none}
+button:focus-visible,select:focus-visible,textarea:focus-visible,.file:focus-within{outline:4px solid #f2b705;outline-offset:2px}
+#preview{max-width:100%;max-height:200px;border-radius:10px;margin-top:10px;display:none}
+#out{white-space:pre-wrap;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:18px;margin-top:22px;display:none}
+#out.err{border-color:var(--rose);color:var(--rose)}
+#listen{display:none;margin-top:12px;background:#f2b705;color:#1d2b2a;width:100%}
+.busy{opacity:.6;pointer-events:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>Phone Guide</h1>
+  <p class="sub">Ask about any app or message. I will explain in your language.</p>
+
+  <label for="lang">Language</label>
+  <select id="lang">
+    <option value="Hindi|hi-IN" selected>हिन्दी (Hindi)</option>
+    <option value="English|en-IN">English</option>
+    <option value="Marathi|mr-IN">मराठी (Marathi)</option>
+    <option value="Gujarati|gu-IN">ગુજરાતી (Gujarati)</option>
+    <option value="Bengali|bn-IN">বাংলা (Bengali)</option>
+    <option value="Tamil|ta-IN">தமிழ் (Tamil)</option>
+    <option value="Telugu|te-IN">తెలుగు (Telugu)</option>
+  </select>
+
+  <label for="text">App name, or paste a message</label>
+  <textarea id="text" placeholder="Example: PhonePe, WhatsApp, or a suspicious SMS"></textarea>
+
+  <label class="file" tabindex="-1">Add a screenshot (optional)
+    <input type="file" id="img" accept="image/*">
+  </label>
+  <img id="preview" alt="Selected screenshot">
+
+  <div class="row">
+    <button class="go" id="explain">Explain this</button>
+    <button class="scam" id="scam">Is this a scam?</button>
+  </div>
+
+  <div id="out" role="status" aria-live="polite"></div>
+  <button id="listen">Listen to the answer</button>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let imageB64 = null;
+
+$("img").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (!f) { imageB64 = null; $("preview").style.display = "none"; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    $("preview").src = reader.result;
+    $("preview").style.display = "block";
+    imageB64 = reader.result.split(",")[1];
+  };
+  reader.readAsDataURL(f);
+});
+
+async function ask(mode) {
+  const [lang] = $("lang").value.split("|");
+  const out = $("out");
+  speechSynthesis.cancel();
+  out.style.display = "block"; out.className = "";
+  out.textContent = "Thinking... please wait.";
+  $("listen").style.display = "none";
+  document.body.classList.add("busy");
+  try {
+    const r = await fetch("/ask", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({lang, mode, text: $("text").value, image: imageB64})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Something went wrong");
+    out.textContent = d.answer;
+    $("listen").style.display = "block";
+  } catch (e) {
+    out.className = "err";
+    out.textContent = e.message;
+  } finally {
+    document.body.classList.remove("busy");
+  }
+}
+
+$("explain").onclick = () => ask("explain");
+$("scam").onclick = () => ask("scam");
+
+$("listen").onclick = () => {
+  const [, code] = $("lang").value.split("|");
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance($("out").textContent);
+  u.lang = code; u.rate = 0.9;
+  speechSynthesis.speak(u);
+};
+</script>
+</body>
+</html>
