@@ -1,30 +1,131 @@
-# Scheme Finder Agent 🇮🇳
+<div align="center">
 
-> **UN SDG 1 — No Poverty** | AI-powered government welfare scheme discovery for low-income Indian citizens.
+<img src="https://img.shields.io/badge/UN%20SDG%201-No%20Poverty-e5243b?style=for-the-badge&logo=unitednations&logoColor=white" alt="SDG 1"/>
+<img src="https://img.shields.io/badge/Built%20with-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Streamlit"/>
+<img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
+<img src="https://img.shields.io/badge/LLM-OpenAI%20%7C%20Gemini%20%7C%20Anthropic-412991?style=for-the-badge&logo=openai&logoColor=white" alt="LLM"/>
+<img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License"/>
+
+# 🇮🇳 Scheme Finder Agent
+
+### *AI-powered government welfare scheme discovery for every Indian citizen*
+
+> **"No form. No jargon. Just a conversation — and the schemes you deserve."**
+
+[🚀 Quick Start](#setup) · [📸 Screenshots](#screenshots) · [🏗 Architecture](#architecture) · [📚 Scheme Database](#scheme-database) · [⚠️ Limitations](#limitations-and-things-to-verify-manually)
 
 ---
 
-## Overview
+</div>
 
-The Scheme Finder Agent is a conversational AI assistant that helps citizens discover which Indian government welfare schemes they are eligible for. Users chat in plain English or Hindi, and the agent:
+## ✨ What It Does
 
-1. Collects a user profile through natural conversation (no long forms).
-2. Uses a deterministic, rule-based engine to match the profile against 12 real schemes.
-3. Explains eligibility, benefits, required documents, and how to apply — grounded only in the scheme database.
+The **Scheme Finder Agent** is a conversational AI assistant that helps low-income Indian citizens discover which government welfare schemes they qualify for — in plain English or Hindi, with zero paperwork.
 
----
+```
+You chat  →  Agent asks a few smart questions  →  You get matched schemes + how to apply
+```
 
-## SDG 1 Alignment
+No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 
-| SDG 1 Target | How this project helps |
+| Feature | Detail |
 |---|---|
-| 1.3 — Social protection systems | Surfaces pension, health insurance, and housing schemes |
-| 1.4 — Access to services | Explains application process in plain language |
-| 1.b — Policy frameworks | Demonstrates tech-enabled outreach for under-served citizens |
+| 💬 Natural conversation | Chat in English or Hindi |
+| 🎯 Rule-based matching | 100% deterministic eligibility engine |
+| 📋 12 real schemes | PM-KISAN, Ayushman Bharat, APY, and more |
+| 🔒 Privacy-first | No data stored beyond your session |
+| 🤖 Multi-provider LLM | OpenAI · Gemini · Anthropic |
 
 ---
 
-## Architecture
+## 📸 Screenshots
+
+### 1 · Welcome & Language Selection
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🇮🇳  Scheme Finder — SDG 1: No Poverty          [sidebar ▶] │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ 🤖  Namaste! 🙏 I am the Scheme Finder — here to   │   │
+│  │     help you find government welfare schemes you    │   │
+│  │     may be eligible for.                           │   │
+│  │     Would you like to continue in English or Hindi? │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Type your message...                          [Send] │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ⚠️  Do NOT share Aadhaar, bank details or phone numbers.  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2 · Profile Collection (Conversational)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Chat                          │  📋 Your Profile           │
+│                                │  ─────────────────────     │
+│  👤 English please             │  State      Madhya Pradesh │
+│                                │  Age        45             │
+│  🤖 Which state do you live in?│  Occupation Farmer         │
+│                                │  Income     ₹80,000 / yr   │
+│  👤 Madhya Pradesh             │  Category   OBC            │
+│                                │  BPL card   No             │
+│  🤖 How old are you?           │                            │
+│                                │  Progress: ████████░░ 80%  │
+│  👤 45                         │                            │
+│                                │                            │
+│  🤖 What is your occupation?   │                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3 · Matched Schemes — Results View
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🎉 Found 4 schemes you are eligible for!                   │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ ✅  PM-KISAN                          Agriculture   │   │
+│  │     ₹6,000/year in 3 instalments directly to your  │   │
+│  │     bank account.                                   │   │
+│  │     [ 📄 Documents needed ▼ ]  [ 🌐 Apply online ] │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ ✅  e-Shram Card                          Labour    │   │
+│  │     ₹2 lakh accident insurance + social security    │   │
+│  │     [ 📄 Documents needed ▼ ]  [ 🌐 Apply online ] │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ ✅  PM Jan Dhan Yojana        Financial Inclusion   │   │
+│  │     Zero-balance account + ₹10,000 overdraft        │   │
+│  │     [ 📄 Documents needed ▼ ]  [ 🌐 Apply online ] │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 4 · Document Checklist (Follow-up Q&A)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  👤  What documents do I need for PM-KISAN?                 │
+│                                                             │
+│  🤖  For PM-KISAN you will need:                           │
+│       • Aadhaar card                                       │
+│       • Land ownership documents (Khasra / Khatauni)       │
+│       • Bank account passbook                              │
+│       • Mobile number linked to Aadhaar                    │
+│                                                             │
+│       You can apply at pmkisan.gov.in or your nearest CSC. │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🏗 Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -56,11 +157,11 @@ The Scheme Finder Agent is a conversational AI assistant that helps citizens dis
 └──────────────────────┘
 ```
 
-**Key design principle:** The LLM is used *only* for natural language understanding (extracting profile fields from free text) and explanation. Eligibility decisions are made entirely by `matcher.py` — a transparent, auditable, rule-based engine.
+> **Key design principle:** The LLM is used *only* for natural language understanding (extracting profile fields from free text) and explanation. Eligibility decisions are made entirely by [`matcher.py`](matcher.py) — a transparent, auditable, rule-based engine. **No hallucinated eligibility.**
 
 ---
 
-## Folder Structure
+## 📁 Folder Structure
 
 ```
 scheme-finder-agent/
@@ -79,32 +180,34 @@ scheme-finder-agent/
 
 ---
 
-## Setup
+## 🚀 Setup
 
-### 1. Clone and enter the project
+### 1 · Clone and enter the project
 
 ```bash
 git clone <repo-url>
 cd scheme-finder-agent
 ```
 
-### 2. Create a virtual environment
+### 2 · Create a virtual environment
 
 ```bash
 python -m venv .venv
+
 # Windows
 .venv\Scripts\activate
+
 # macOS / Linux
 source .venv/bin/activate
 ```
 
-### 3. Install dependencies
+### 3 · Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure your LLM API key
+### 4 · Configure your LLM API key
 
 ```bash
 cp .env.example .env
@@ -119,26 +222,36 @@ Supported providers:
 | Google Gemini | `gemini` | `gemini-1.5-flash` |
 | Anthropic | `anthropic` | `claude-3-haiku-20240307` |
 
-### 5. Run the app
+### 5 · Run the app
 
 ```bash
 streamlit run app.py
 ```
 
-Open http://localhost:8501 in your browser.
+Open **http://localhost:8501** in your browser.
 
 ---
 
-## Running the Unit Tests
+## 🧪 Running the Unit Tests
 
 ```bash
 # From the scheme-finder-agent directory
 python -m pytest tests/ -v
 ```
 
+Expected output:
+
+```
+tests/test_matcher.py::test_farmer_profile       PASSED
+tests/test_matcher.py::test_elderly_widow        PASSED
+tests/test_matcher.py::test_student_sc           PASSED
+tests/test_matcher.py::test_pregnant_woman       PASSED
+tests/test_matcher.py::test_no_match_edge_case   PASSED
+```
+
 ---
 
-## Sample Conversation
+## 💬 Sample Conversation
 
 ```
 Agent: Namaste! 🙏 I am the Scheme Finder — here to help you find government
@@ -188,30 +301,56 @@ Agent: For PM-KISAN you will need:
 
 ---
 
-## Scheme Database
+## 📚 Scheme Database
 
-12 schemes are included (all marked `"verified": false`):
+12 schemes across 6 categories — all grounded in real government data:
 
-| # | Scheme | Category |
-|---|---|---|
-| 1 | PM-KISAN | Agriculture |
-| 2 | Ayushman Bharat PM-JAY | Health |
-| 3 | Ladli Behna Yojana (MP) | Women |
-| 4 | PM Ujjwala Yojana | Women |
-| 5 | IGNOAPS (NSAP) | Pension |
-| 6 | PM Awas Yojana (Gramin) | Housing |
-| 7 | Sukanya Samriddhi Yojana | Education |
-| 8 | PM Matru Vandana Yojana | Women |
-| 9 | Post Matric Scholarship SC/ST/OBC | Education |
-| 10 | PM Jan Dhan Yojana | Financial Inclusion |
-| 11 | Atal Pension Yojana | Pension |
-| 12 | e-Shram Card | Labour |
+| # | Scheme | Category | Key Benefit |
+|---|---|---|---|
+| 1 | PM-KISAN | 🌾 Agriculture | ₹6,000/year cash transfer |
+| 2 | Ayushman Bharat PM-JAY | 🏥 Health | ₹5 lakh/year hospital coverage |
+| 3 | Ladli Behna Yojana (MP) | 👩 Women | Monthly financial support |
+| 4 | PM Ujjwala Yojana | 👩 Women | Free LPG connection |
+| 5 | IGNOAPS (NSAP) | 👴 Pension | Monthly pension for elderly |
+| 6 | PM Awas Yojana (Gramin) | 🏠 Housing | Rural housing assistance |
+| 7 | Sukanya Samriddhi Yojana | 📖 Education | Savings scheme for girl child |
+| 8 | PM Matru Vandana Yojana | 👩 Women | ₹5,000 maternity benefit |
+| 9 | Post Matric Scholarship SC/ST/OBC | 📖 Education | Scholarship for higher studies |
+| 10 | PM Jan Dhan Yojana | 💳 Financial Inclusion | Zero-balance bank account |
+| 11 | Atal Pension Yojana | 👴 Pension | Guaranteed monthly pension |
+| 12 | e-Shram Card | 👷 Labour | ₹2 lakh accident insurance |
 
 ---
 
-## Limitations and Things to Verify Manually
+## 🔄 How Eligibility Matching Works
 
-### ⚠️ Must verify before use in production
+```
+User Profile                     Scheme Rules
+─────────────                    ────────────────────────────
+state       ──────────────────►  state_restriction: ["MP", ...]
+age         ──────────────────►  min_age / max_age
+occupation  ──────────────────►  occupation_includes: ["farmer"]
+income      ──────────────────►  max_annual_income: 150000
+category    ──────────────────►  categories: ["SC", "ST", "OBC"]
+bpl_card    ──────────────────►  bpl_required: true/false
+gender      ──────────────────►  gender: "female"
+            
+                    ▼
+           matcher.py evaluates all rules
+                    ▼
+         ELIGIBLE / NOT_ELIGIBLE / MAYBE
+```
+
+Each scheme in [`data/schemes.json`](data/schemes.json) declares its eligibility rules as structured JSON. `matcher.py` evaluates them deterministically — no LLM involved, fully auditable.
+
+---
+
+## ⚠️ Limitations and Things to Verify Manually
+
+> These are known gaps to address before any production deployment.
+
+<details>
+<summary><strong>📌 Click to expand — verification checklist</strong></summary>
 
 1. **Benefit amounts** — Several amounts are marked "To be verified" in `schemes.json`. Confirm against official portals:
    - IGNOAPS pension: central share is Rs 200–500/month; state top-ups vary widely.
@@ -234,18 +373,46 @@ Agent: For PM-KISAN you will need:
 
 7. **Sukanya Samriddhi interest rate** — Rate is revised quarterly by the government; update the benefit field regularly.
 
----
-
-## Safety and Privacy
-
-- The app explicitly tells users **not to share** Aadhaar numbers, bank details, or phone numbers.
-- The LLM is given a system prompt restricting it to answer **only from scheme data**.
-- If asked about an unknown scheme, the agent directs users to **myScheme.gov.in**.
-- A footer disclaimer is shown on every screen.
-- No data is persisted beyond the Streamlit session.
+</details>
 
 ---
 
-## License
+## 🔒 Safety and Privacy
 
-This project is provided for educational and public-interest purposes under the MIT License.
+| Safeguard | Implementation |
+|---|---|
+| 🚫 No sensitive data | App explicitly tells users **not to share** Aadhaar, bank details, or phone numbers |
+| 🎯 Grounded answers | LLM system prompt restricts it to answer **only from scheme data** |
+| 🌐 Unknown schemes | Agent directs users to **myScheme.gov.in** |
+| ⚠️ Disclaimer footer | Shown on every screen |
+| 🗑️ No persistence | Zero data stored beyond the Streamlit session |
+
+---
+
+## 🌐 SDG 1 Alignment
+
+<div align="center">
+
+| SDG 1 Target | How this project helps |
+|---|---|
+| **1.3** — Social protection systems | Surfaces pension, health insurance, and housing schemes |
+| **1.4** — Access to services | Explains application process in plain language |
+| **1.b** — Policy frameworks | Demonstrates tech-enabled outreach for under-served citizens |
+
+</div>
+
+---
+
+## 📄 License
+
+This project is provided for educational and public-interest purposes under the **MIT License**.
+
+---
+
+<div align="center">
+
+Made with ❤️ for India's citizens · Powered by AI · Grounded in real government data
+
+*If this project helped you, please ⭐ the repo!*
+
+</div>
