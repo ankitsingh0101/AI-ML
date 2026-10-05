@@ -6,9 +6,11 @@ Run with:  streamlit run app.py
 
 from __future__ import annotations
 
+import base64
 import json
 
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
 import agent as ag
@@ -28,8 +30,109 @@ st.set_page_config(
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
+# localStorage persistence helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Keys that are cheap to serialise and worth persisting across refreshes.
+# (We skip "schemes" — always re-loaded from disk, and "profile_complete" —
+#  derived at runtime.)
+_PERSIST_KEYS = [
+    "language", "profile", "messages",
+    "match_results", "greeted", "scheme_of_day_shown", "last_asked_field",
+]
+_LS_KEY = "sfa_session"   # localStorage key name
+_QP_KEY = "_sfa"          # query-param key used as the restore bridge
+
+
+def _save_to_storage() -> None:
+    """Serialise the current session into browser localStorage (0-height iframe)."""
+    payload = {}
+    for k in _PERSIST_KEYS:
+        v = st.session_state.get(k)
+        if v is not None:
+            payload[k] = v
+    json_str = json.dumps(payload, ensure_ascii=False)
+    # Escape backticks so the string can be embedded in a JS template literal
+    json_escaped = json_str.replace("\\", "\\\\").replace("`", "\\`")
+    components.html(
+        f"""<script>
+        try {{ localStorage.setItem('{_LS_KEY}', `{json_escaped}`); }}
+        catch(e) {{}}
+        </script>""",
+        height=0,
+    )
+
+
+def _clear_storage() -> None:
+    """Wipe the localStorage entry (called on Restart Conversation)."""
+    components.html(
+        f"""<script>
+        try {{ localStorage.removeItem('{_LS_KEY}'); }}
+        catch(e) {{}}
+        </script>""",
+        height=0,
+    )
+
+
+def _maybe_restore_from_storage() -> None:
+    """
+    Two-phase restore via query params (the only synchronous bridge between
+    browser JS and Streamlit Python on a page load):
+
+    Phase A — first load, no query param yet:
+        Inject a JS snippet that reads localStorage and, if data exists,
+        rewrites the URL to add  ?_sfa=<base64json>  then triggers a reload.
+
+    Phase B — reloaded with query param:
+        Python reads st.query_params[_QP_KEY], deserialises, hydrates
+        st.session_state, then removes the query param (clean URL).
+    """
+    # ── Phase B: query param present → hydrate and remove ────────────────────
+    raw_qp = st.query_params.get(_QP_KEY, "")
+    if raw_qp:
+        try:
+            restored = json.loads(base64.b64decode(raw_qp.encode()).decode())
+            for k in _PERSIST_KEYS:
+                if k in restored:
+                    st.session_state[k] = restored[k]
+        except Exception:
+            pass  # corrupted storage — ignore, fresh start
+        # Remove the query param so it doesn't persist in the URL
+        del st.query_params[_QP_KEY]
+        return  # session_state is now hydrated; _init_state fills gaps below
+
+    # ── Phase A: no query param yet → ask JS to check localStorage ───────────
+    # Only inject the JS bridge once per browser session (track with a flag).
+    if st.session_state.get("_storage_checked"):
+        return
+    st.session_state["_storage_checked"] = True
+
+    components.html(
+        f"""<script>
+        (function() {{
+            try {{
+                var raw = localStorage.getItem('{_LS_KEY}');
+                if (!raw) return;
+                // base64-encode so it survives URL encoding intact
+                var b64 = btoa(unescape(encodeURIComponent(raw)));
+                var url = new URL(window.parent.location.href);
+                url.searchParams.set('{_QP_KEY}', b64);
+                window.parent.location.replace(url.toString());
+            }} catch(e) {{}}
+        }})();
+        </script>""",
+        height=0,
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Session state initialisation
 # ──────────────────────────────────────────────────────────────────────────────
+
+# Attempt to restore from browser localStorage BEFORE _init_state so that
+# restored values are not overwritten by the defaults.
+_maybe_restore_from_storage()
+
 
 def _init_state() -> None:
     defaults: dict = {
@@ -61,9 +164,11 @@ def _add_message(role: str, content: str) -> None:
 
 def _reset() -> None:
     for key in ["profile", "messages", "match_results", "greeted",
-                "profile_complete", "scheme_of_day_shown", "last_asked_field"]:
+                "profile_complete", "scheme_of_day_shown", "last_asked_field",
+                "_storage_checked"]:
         if key in st.session_state:
             del st.session_state[key]
+    _clear_storage()
     _init_state()
 
 
@@ -189,6 +294,13 @@ if not st.session_state.greeted:
         st.markdown(greeting)
     _add_message("assistant", greeting)
     st.session_state.greeted = True
+    # The greeting ends by asking for language choice; the very first profile
+    # question will be "state".  Pre-set last_asked_field so that when the user
+    # replies with their language AND immediately provides a state (or a bad
+    # value like "Nepal"), context_field is already pointing at "state" and
+    # Groq validation / __invalid__ logic fires correctly.
+    st.session_state.last_asked_field = "state"
+    _save_to_storage()   # persist greeted=True + last_asked_field immediately
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Match results display (rendered once match is available)
@@ -384,18 +496,63 @@ if user_input := st.chat_input(placeholder):
                 if updates.get("__invalid__"):
                     questions_map = ag._QUESTIONS_HI if lang == "Hindi" else ag._QUESTIONS_EN
                     same_q = questions_map.get(context_field, "")
+
+                    # Per-field hints so the user knows exactly what went wrong
+                    _hints_en = {
+                        "state": (
+                            f"**\"{user_input}\" is not an Indian state or union territory.** "
+                            "Please enter the name of the state or UT where you currently live in India "
+                            "(e.g. Rajasthan, Delhi, Tamil Nadu)."
+                        ),
+                        "gender": "Please enter **male**, **female**, or **other**.",
+                        "social_category": "Please enter one of: **General**, **OBC**, **SC**, or **ST**.",
+                        "marital_status": (
+                            "Please enter one of: **married**, **unmarried**, **widow**, "
+                            "**divorced**, or **abandoned**."
+                        ),
+                        "age": "Please enter your age as a number between 5 and 120.",
+                        "annual_income": "Please enter your annual income as a number in rupees (e.g. 80000).",
+                        "occupation": (
+                            f"**\"{user_input}\" doesn't seem to be a recognisable occupation.** "
+                            "Please enter your actual job or profession (e.g. farmer, teacher, shopkeeper)."
+                        ),
+                    }
+                    _hints_hi = {
+                        "state": (
+                            f"**\"{user_input}\" कोई भारतीय राज्य या केंद्र शासित प्रदेश नहीं है।** "
+                            "कृपया वह राज्य/केंद्र शासित प्रदेश लिखें जहाँ आप रहते हैं "
+                            "(जैसे राजस्थान, दिल्ली, तमिल नाडु)।"
+                        ),
+                        "gender": "कृपया **पुरुष**, **महिला**, या **अन्य** लिखें।",
+                        "social_category": "कृपया इनमें से एक लिखें: **सामान्य**, **ओबीसी**, **एससी**, या **एसटी**।",
+                        "marital_status": (
+                            "कृपया इनमें से एक लिखें: **विवाहित**, **अविवाहित**, **विधवा**, "
+                            "**तलाकशुदा**, या **परित्यक्त**।"
+                        ),
+                        "age": "कृपया अपनी आयु 5 से 120 के बीच की संख्या में लिखें।",
+                        "annual_income": "कृपया वार्षिक आय रुपये में लिखें (जैसे 80000)।",
+                        "occupation": (
+                            f"**\"{user_input}\" कोई पहचाना जाने वाला व्यवसाय नहीं लगता।** "
+                            "कृपया अपना असली काम या पेशा लिखें (जैसे किसान, शिक्षक, दुकानदार)।"
+                        ),
+                    }
+
+                    hints = _hints_hi if lang == "Hindi" else _hints_en
+                    hint = hints.get(context_field, "")
+
                     if lang == "Hindi":
-                        retry_msg = (
+                        retry_msg = f"⚠️ {hint}\n\n{same_q}" if hint else (
                             f"⚠️ वह जवाब **{context_field}** के लिए सही नहीं लगता। "
                             f"कृपया सही जानकारी दें।\n\n{same_q}"
                         )
                     else:
-                        retry_msg = (
+                        retry_msg = f"⚠️ {hint}\n\n{same_q}" if hint else (
                             f"⚠️ That doesn't look like a valid **{context_field.replace('_', ' ')}**. "
                             f"Please enter a correct value.\n\n{same_q}"
                         )
                     st.markdown(retry_msg)
                     _add_message("assistant", retry_msg)
+                    _save_to_storage()   # persist the re-ask message
                     st.stop()
 
                 if updates:
@@ -444,12 +601,14 @@ if user_input := st.chat_input(placeholder):
 
                     st.markdown(summary)
                     _add_message("assistant", summary)
+                    _save_to_storage()   # profile + match_results now complete
                     _render_match_results(results, lang)
 
                 elif next_q:
                     reply = (ack + "\n\n" if ack else "") + next_q
                     st.markdown(reply)
                     _add_message("assistant", reply)
+                    _save_to_storage()   # profile field captured, next question stored
                 else:
                     # Profile seems complete; answer as follow-up
                     history = st.session_state.messages[:-1]  # exclude current user msg
@@ -462,6 +621,7 @@ if user_input := st.chat_input(placeholder):
                     )
                     st.markdown(answer)
                     _add_message("assistant", answer)
+                    _save_to_storage()   # conversation history updated
 
             except ValueError as exc:
                 # Typically missing API key

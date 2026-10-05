@@ -471,7 +471,10 @@ def _llm_validate_field(field: str, raw_value: str) -> tuple[bool, object]:
     # symbols, digits-only for a text field, or a string with no vowels that
     # looks like keyboard mashing), reject it immediately without an API call.
     # This saves LLM quota and avoids inconsistent model behaviour on gibberish.
-    _text_fields = {"occupation", "state", "gender", "social_category", "marital_status"}
+    #
+    # NOTE: social_category is excluded — its valid values include "SC" and "ST"
+    # which are legitimate abbreviations with no vowels.
+    _text_fields = {"occupation", "state", "gender", "marital_status"}
     if field in _text_fields:
         letters_only = re.sub(r"[^a-zA-Z]", "", raw_value)
         # Must have at least 2 letters and at least one vowel
