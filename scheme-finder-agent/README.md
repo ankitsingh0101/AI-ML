@@ -3,6 +3,7 @@
 <img src="https://img.shields.io/badge/UN%20SDG%201-No%20Poverty-e5243b?style=for-the-badge&logo=unitednations&logoColor=white" alt="SDG 1"/>
 <img src="https://img.shields.io/badge/Built%20with-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Streamlit"/>
 <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
+<img src="https://img.shields.io/badge/Streamlit-%E2%89%A51.36-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Streamlit 1.36+"/>
 <img src="https://img.shields.io/badge/LLM-OpenAI%20%7C%20Gemini%20%7C%20Anthropic%20%7C%20Groq-412991?style=for-the-badge&logo=openai&logoColor=white" alt="LLM"/>
 <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License"/>
 
@@ -33,7 +34,8 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 | 💬 Natural conversation | Chat in English or Hindi |
 | 🎯 Rule-based matching | 100% deterministic eligibility engine |
 | 📋 12 real schemes | PM-KISAN, Ayushman Bharat, APY, and more |
-| 🔒 Privacy-first | Session persisted in URL only — no server storage, no database |
+| 🔒 Privacy-first | No server storage, no database, no cookies |
+| 🔄 Refresh-safe | Full chat + profile restored on browser refresh via URL query param |
 | 🤖 Multi-provider LLM | OpenAI · Gemini · Anthropic · Groq ⚡ |
 | ✅ Smart input validation | Regex-first; Groq only for unknown values |
 
@@ -92,6 +94,7 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 │  ┌──────────────┐  ┌──────────────────┐  ┌─────────────────┐   │
 │  │  Chat panel  │  │  Profile sidebar  │  │  Scheme cards   │   │
 │  └──────┬───────┘  └──────────────────┘  └────────┬────────┘   │
+│         │   session saved to ?_sfa= query param    │            │
 └─────────┼──────────────────────────────────────────┼────────────┘
           │ user message                              │ match results
           ▼                                           │
@@ -328,6 +331,27 @@ User types an answer
 | `Chandigarh` | state | Tier 1 ✅ | UT in hardcoded list |
 | `banana123` | state | Tier 2 ❌ | "Please enter a valid state" |
 | `!!!` | occupation | Tier 2 ❌ | "Please enter a valid occupation" |
+
+---
+
+## 🔄 How Session Persistence Works
+
+```
+User sends a message
+        │
+        ▼
+app.py saves profile + chat to st.query_params[_sfa]
+  → URL becomes  http://localhost:8501/?_sfa=<compressed-base64-json>
+
+User refreshes browser
+        │  browser resends the same URL
+        ▼
+app.py reads st.query_params[_sfa]  (pure Python, no JS)
+  → zlib decompress → JSON parse → hydrate st.session_state
+  → conversation and profile fully restored
+```
+
+> **No JS, no localStorage, no cookies.** Session lives in the URL itself — share the URL to hand off a session, or bookmark it to resume later.
 
 ---
 
