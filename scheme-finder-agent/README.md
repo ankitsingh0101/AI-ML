@@ -82,23 +82,6 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 
 ---
 
-### 6 · Streamlit Cloud Deployment — App Config
-
-> The app is deployed on Streamlit Community Cloud from the `ankitsingh0101/AI-ML` repository, pointing to `scheme-finder-agent/app.py` on the `main` branch.
-
-![Streamlit Cloud deploy configuration screen](screenshots/Screenshot%202026-10-05%20201014.png)
-
----
-
-### 7 · Streamlit Cloud — Secrets Configuration
-
-> LLM API keys are stored as encrypted **Secrets** in TOML format via Streamlit Cloud's Advanced Settings — never hardcoded or committed to the repo.
-
-![Streamlit Cloud advanced settings and secrets](screenshots/Screenshot%202026-10-05%20201058.png)
-
----
-
-<a name="architecture"></a>
 
 ## 🏗 Architecture
 
