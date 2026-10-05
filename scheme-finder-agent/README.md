@@ -33,7 +33,7 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 | 💬 Natural conversation | Chat in English or Hindi |
 | 🎯 Rule-based matching | 100% deterministic eligibility engine |
 | 📋 12 real schemes | PM-KISAN, Ayushman Bharat, APY, and more |
-| 🔒 Privacy-first | No data stored beyond your session |
+| 🔒 Privacy-first | Session persisted in URL only — no server storage, no database |
 | 🤖 Multi-provider LLM | OpenAI · Gemini · Anthropic · Groq ⚡ |
 | ✅ Smart input validation | Regex-first; Groq only for unknown values |
 
@@ -396,7 +396,7 @@ Each scheme in [`data/schemes.json`](data/schemes.json) declares its eligibility
 | 🎯 Grounded answers | LLM system prompt restricts it to answer **only from scheme data** |
 | 🌐 Unknown schemes | Agent directs users to **myScheme.gov.in** |
 | ⚠️ Disclaimer footer | Shown on every screen |
-| 🗑️ No persistence | Zero data stored beyond the Streamlit session |
+| 🔄 Session persistence | Chat + profile survive a browser refresh via a URL query param (`?_sfa=`) — no server-side storage, no database, no cookies |
 
 ---
 
