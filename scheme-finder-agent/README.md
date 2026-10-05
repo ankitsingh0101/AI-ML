@@ -12,7 +12,7 @@
 
 > **"No form. No jargon. Just a conversation — and the schemes you deserve."**
 
-[🚀 Quick Start](#setup) · [📸 Screenshots](#screenshots) · [🏗 Architecture](#architecture) · [📚 Scheme Database](#scheme-database) · [⚠️ Limitations](#limitations-and-things-to-verify-manually)
+[🚀 Quick Start](#quick-start) · [📸 Screenshots](#screenshots) · [🏗 Architecture](#architecture) · [📚 Scheme Database](#scheme-database) · [⚠️ Limitations](#limitations)
 
 ---
 
@@ -37,6 +37,8 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 | 🤖 Multi-provider LLM | OpenAI · Gemini · Anthropic |
 
 ---
+
+<a name="screenshots"></a>
 
 ## 📸 Screenshots
 
@@ -125,6 +127,8 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 
 ---
 
+<a name="architecture"></a>
+
 ## 🏗 Architecture
 
 ```
@@ -179,6 +183,8 @@ scheme-finder-agent/
 ```
 
 ---
+
+<a name="quick-start"></a>
 
 ## 🚀 Setup
 
@@ -301,6 +307,8 @@ Agent: For PM-KISAN you will need:
 
 ---
 
+<a name="scheme-database"></a>
+
 ## 📚 Scheme Database
 
 12 schemes across 6 categories — all grounded in real government data:
@@ -344,6 +352,8 @@ gender      ──────────────────►  gender: "
 Each scheme in [`data/schemes.json`](data/schemes.json) declares its eligibility rules as structured JSON. `matcher.py` evaluates them deterministically — no LLM involved, fully auditable.
 
 ---
+
+<a name="limitations"></a>
 
 ## ⚠️ Limitations and Things to Verify Manually
 
