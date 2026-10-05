@@ -186,7 +186,9 @@ def _groq(
             "groq package not installed. Run: pip install groq"
         ) from exc
 
-    model = LLM_MODEL or "llama3-8b-8192"
+    # If LLM_MODEL is explicitly set in .env, always use it as-is — the user
+    # knows what they want. Only fall back when LLM_MODEL is blank/unset.
+    model = LLM_MODEL if LLM_MODEL else "qwen/qwen3.8-27b"
     client = Groq(api_key=LLM_API_KEY)
 
     full_messages = []

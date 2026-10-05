@@ -3,7 +3,7 @@
 <img src="https://img.shields.io/badge/UN%20SDG%201-No%20Poverty-e5243b?style=for-the-badge&logo=unitednations&logoColor=white" alt="SDG 1"/>
 <img src="https://img.shields.io/badge/Built%20with-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Streamlit"/>
 <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
-<img src="https://img.shields.io/badge/LLM-OpenAI%20%7C%20Gemini%20%7C%20Anthropic-412991?style=for-the-badge&logo=openai&logoColor=white" alt="LLM"/>
+<img src="https://img.shields.io/badge/LLM-OpenAI%20%7C%20Gemini%20%7C%20Anthropic%20%7C%20Groq-412991?style=for-the-badge&logo=openai&logoColor=white" alt="LLM"/>
 <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License"/>
 
 # 🇮🇳 Scheme Finder Agent
@@ -34,7 +34,8 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 | 🎯 Rule-based matching | 100% deterministic eligibility engine |
 | 📋 12 real schemes | PM-KISAN, Ayushman Bharat, APY, and more |
 | 🔒 Privacy-first | No data stored beyond your session |
-| 🤖 Multi-provider LLM | OpenAI · Gemini · Anthropic |
+| 🤖 Multi-provider LLM | OpenAI · Gemini · Anthropic · Groq ⚡ |
+| ✅ Smart input validation | Regex-first; Groq only for unknown values |
 
 ---
 
@@ -101,12 +102,12 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 │  - format_results   │                    │  - deterministic    │
 │  - answer_followup  │                    └─────────────────────┘
 └──────────┬──────────┘
-           │ LLM calls (NLU + explanation only)
+           │ LLM calls (validation + explanation only)
            ▼
-┌──────────────────────┐       ┌──────────────────────┐
-│       llm.py         │──────►│  OpenAI / Gemini /    │
-│  provider-agnostic   │       │  Anthropic API        │
-└──────────────────────┘       └──────────────────────┘
+┌──────────────────────┐       ┌────────────────────────────────┐
+│       llm.py         │──────►│  OpenAI / Gemini / Anthropic / │
+│  provider-agnostic   │       │  Groq  (qwen/qwen3.8-27b)      │
+└──────────────────────┘       └────────────────────────────────┘
            │
            ▼
 ┌──────────────────────┐
@@ -115,7 +116,7 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 └──────────────────────┘
 ```
 
-> **Key design principle:** The LLM is used *only* for natural language understanding (extracting profile fields from free text) and explanation. Eligibility decisions are made entirely by [`matcher.py`](matcher.py) — a transparent, auditable, rule-based engine. **No hallucinated eligibility.**
+> **Key design principle:** The LLM is used *only* for validating unknown free-text input and explaining results. Eligibility decisions are made entirely by [`matcher.py`](matcher.py) — a transparent, auditable, rule-based engine. **No hallucinated eligibility.**
 
 ---
 
@@ -176,12 +177,14 @@ cp .env.example .env
 
 Supported providers:
 
-| Provider | `LLM_PROVIDER` value | Default model |
-|---|---|---|
-| OpenAI | `openai` | `gpt-4o-mini` |
-| Google Gemini | `gemini` | `gemini-1.5-flash` |
-| Anthropic | `anthropic` | `claude-3-haiku-20240307` |
-| Groq ⚡ | `groq` | `llama3-8b-8192` |
+| Provider | `LLM_PROVIDER` value | Default model | Notes |
+|---|---|---|---|
+| OpenAI | `openai` | `gpt-4o-mini` | Best quality |
+| Google Gemini | `gemini` | `gemini-1.5-flash` | Good free tier |
+| Anthropic | `anthropic` | `claude-3-haiku-20240307` | Fast + cheap |
+| Groq ⚡ | `groq` | `qwen/qwen3.8-27b` | **Recommended** — 3/3 tasks correct, ~0.18s |
+
+> **Groq note:** Available models differ per account. The default `qwen/qwen3.8-27b` was benchmarked against all available models for this project's validation task — it scored 3/3 correct at 0.18s average, outperforming the others. To override, set `LLM_MODEL` in `.env`. To list your account's models, run the command in `.env.example`.
 
 ### 5 · Run the app
 
@@ -282,6 +285,49 @@ Agent: For PM-KISAN you will need:
 | 10 | PM Jan Dhan Yojana | 💳 Financial Inclusion | Zero-balance bank account |
 | 11 | Atal Pension Yojana | 👴 Pension | Guaranteed monthly pension |
 | 12 | e-Shram Card | 👷 Labour | ₹2 lakh accident insurance |
+
+---
+
+## 🧠 Smart Input Validation — 3-Tier Strategy
+
+When a user answers a question, the agent processes the input through three tiers in order:
+
+```
+User types an answer
+        │
+        ▼
+┌─────────────────────────────────────────────────┐
+│  TIER 1 — Regex  (instant, zero API cost)       │
+│  Matches hardcoded known values per field       │
+│  States, common occupations, yes/no, numbers…   │
+│  ✅ Match found → store it, done                │
+└───────────────────┬─────────────────────────────┘
+                    │ No match
+                    ▼
+┌─────────────────────────────────────────────────┐
+│  TIER 2 — Groq validation  (API key required)   │
+│  Asks LLM: "Is this a valid {field} value?"     │
+│  ✅ Valid  → store LLM-normalised canonical     │
+│  ❌ Invalid → re-ask with friendly error msg    │
+└───────────────────┬─────────────────────────────┘
+                    │ No API key configured
+                    ▼
+┌─────────────────────────────────────────────────┐
+│  TIER 3 — Graceful fallback                     │
+│  Accept raw input as-is, conversation continues │
+└─────────────────────────────────────────────────┘
+```
+
+**Examples:**
+| Input | Field | Tier | Result |
+|---|---|---|---|
+| `farmer` | occupation | Tier 1 ✅ | Stored immediately |
+| `Jharkhand` | state | Tier 1 ✅ | Stored immediately |
+| `yes` | has_bpl | Tier 1 ✅ | `true` stored |
+| `army officer` | occupation | Tier 2 ✅ | Groq validates → stored |
+| `Chandigarh` | state | Tier 1 ✅ | UT in hardcoded list |
+| `banana123` | state | Tier 2 ❌ | "Please enter a valid state" |
+| `!!!` | occupation | Tier 2 ❌ | "Please enter a valid occupation" |
 
 ---
 

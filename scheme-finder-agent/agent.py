@@ -124,18 +124,64 @@ User message: {message}
 
 JSON only, no explanation:"""
 
+# Used only when regex finds nothing for a specific field and we need
+# Groq to decide: is this a valid value, and if so, what is the canonical form?
+_VALIDATE_PROMPT = """You are a strict data-validation assistant for an Indian government scheme eligibility tool.
+
+The user was asked for their "{field}" and replied: "{value}"
+
+Your job: decide if the reply is a legitimate answer for the field.
+
+STRICT rules:
+- Reply ONLY with a JSON object. No explanation, no extra text.
+- If VALID:   {{"valid": true, "canonical": <normalised value>}}
+- If INVALID: {{"valid": false}}
+
+Field-specific validation rules:
+  occupation  → Must be a recognisable real-world job or profession that a person can hold.
+                Examples of VALID: farmer, teacher, entrepreneur, plumber, army officer, nurse, shopkeeper.
+                Examples of INVALID: random letters, numbers, nonsense words, things that are not jobs.
+                If it is a real job/profession (even uncommon), it is valid.
+
+  state       → Must be the name of a real Indian state or union territory.
+                Examples of VALID: Jharkhand, Delhi, Puducherry, Chandigarh.
+                Anything that is not a real Indian state/UT is INVALID.
+
+  gender      → Must be exactly "male", "female", or "other". Anything else is INVALID.
+
+  social_category → Must be one of: General, OBC, SC, ST. Anything else is INVALID.
+
+  marital_status  → Must be one of: married, unmarried, widow, divorced, abandoned. Anything else is INVALID.
+
+  age         → Must be an integer between 5 and 120. Anything else is INVALID.
+
+  annual_income → Must be a number representing INR, between 1000 and 100000000. Anything else is INVALID.
+
+  has_bpl / has_disability / has_bank_account → Must clearly mean yes (true) or no (false). Anything ambiguous is INVALID.
+
+  num_daughters → Must be a non-negative integer. Anything else is INVALID.
+
+  land_acres  → Must be a non-negative number. Anything else is INVALID.
+
+Be STRICT. When in doubt, return {{"valid": false}}."""
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Regex-based fallback extractor (no LLM needed)
 # ──────────────────────────────────────────────────────────────────────────────
 
 _INDIAN_STATES = {
+    # States
     "andhra pradesh", "arunachal pradesh", "assam", "bihar", "chhattisgarh",
     "goa", "gujarat", "haryana", "himachal pradesh", "jharkhand", "karnataka",
     "kerala", "madhya pradesh", "mp", "maharashtra", "manipur", "meghalaya",
     "mizoram", "nagaland", "odisha", "punjab", "rajasthan", "sikkim",
     "tamil nadu", "telangana", "tripura", "uttar pradesh", "up", "uttarakhand",
-    "west bengal", "delhi", "jammu and kashna", "ladakh",
+    "west bengal",
+    # Union Territories
+    "delhi", "new delhi", "jammu and kashmir", "jammu and kashna", "ladakh",
+    "chandigarh", "puducherry", "pondicherry", "dadra and nagar haveli",
+    "daman and diu", "lakshadweep", "andaman and nicobar", "andaman and nicobar islands",
 }
 
 _STATE_NORMALIZE = {"mp": "Madhya Pradesh", "up": "Uttar Pradesh"}
@@ -145,6 +191,13 @@ _STATE_TITLE = {
     "west bengal": "West Bengal", "andhra pradesh": "Andhra Pradesh",
     "arunachal pradesh": "Arunachal Pradesh", "himachal pradesh": "Himachal Pradesh",
     "tamil nadu": "Tamil Nadu", "jammu and kashmir": "Jammu and Kashmir",
+    "jammu and kashna": "Jammu and Kashmir",
+    "new delhi": "Delhi",
+    "pondicherry": "Puducherry",
+    "andaman and nicobar": "Andaman and Nicobar Islands",
+    "andaman and nicobar islands": "Andaman and Nicobar Islands",
+    "dadra and nagar haveli": "Dadra and Nagar Haveli and Daman and Diu",
+    "daman and diu": "Dadra and Nagar Haveli and Daman and Diu",
 }
 
 
@@ -156,6 +209,9 @@ _OCCUPATIONS = [
     "homemaker", "unemployed", "self-employed", "construction worker",
     "domestic worker", "street vendor", "agricultural labourer",
     "labourer", "labor", "labour",
+    "entrepreneur", "business owner", "shopkeeper", "trader",
+    "driver", "teacher", "nurse", "doctor", "government employee",
+    "private employee", "salaried", "retired",
 ]
 
 _CATEGORY_MAP = {
@@ -237,6 +293,19 @@ def _regex_extract(text: str, context_field: str | None = None) -> dict:
         if bare in ("female", "woman", "girl", "f", "lady", "महिला"):
             updates["gender"] = "female"
             return updates
+
+    elif context_field == "occupation":
+        if bare:
+            # Only confirm hardcoded/known occupations here.
+            # Unknown values are intentionally NOT set — they fall through to
+            # Tier 2 (Groq validation) so garbage is rejected and novel jobs
+            # like "army officer" or "electrician" are accepted via the LLM.
+            # Tier 3 (no API key) will accept them as-is downstream.
+            for occ in sorted(_OCCUPATIONS, key=len, reverse=True):
+                if bare == occ or bare == occ.replace("-", " "):
+                    updates["occupation"] = occ if occ not in ("labourer", "labor", "labour", "daily wage worker") else "daily-wage worker"
+                    return updates
+            # Not in hardcoded list — return nothing; let Tier 2/3 decide.
 
     elif context_field == "social_category":
         for key, val in _CATEGORY_MAP.items():
@@ -389,6 +458,71 @@ def _regex_extract(text: str, context_field: str | None = None) -> dict:
     return updates
 
 
+def _llm_validate_field(field: str, raw_value: str) -> tuple[bool, object]:
+    """
+    Ask the LLM whether `raw_value` is a valid answer for `field`.
+
+    Returns:
+        (True,  canonical_value)  — valid, use canonical_value in the profile
+        (False, None)             — invalid, ask the user to re-enter
+    Raises RuntimeError on API failure.
+    """
+    # Quick pre-filter: if the value has no real letter sequences (e.g. pure
+    # symbols, digits-only for a text field, or a string with no vowels that
+    # looks like keyboard mashing), reject it immediately without an API call.
+    # This saves LLM quota and avoids inconsistent model behaviour on gibberish.
+    _text_fields = {"occupation", "state", "gender", "social_category", "marital_status"}
+    if field in _text_fields:
+        letters_only = re.sub(r"[^a-zA-Z]", "", raw_value)
+        # Must have at least 2 letters and at least one vowel
+        if len(letters_only) < 2 or not re.search(r"[aeiouAEIOU]", letters_only):
+            return False, None
+
+    prompt = _VALIDATE_PROMPT.format(field=field, value=raw_value)
+    try:
+        raw = chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            system_prompt="",
+            temperature=0.0,
+            max_tokens=100,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Groq validation failed: {exc}") from exc
+
+    raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+    m = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not m:
+        # LLM gave unparseable output — treat as invalid to be safe
+        return False, None
+    try:
+        obj = json.loads(m.group())
+    except json.JSONDecodeError:
+        return False, None
+
+    if not obj.get("valid", False):
+        return False, None
+
+    canonical = obj.get("canonical", raw_value)
+
+    # Type-coerce canonical to match the expected field type
+    try:
+        if field in ("age", "num_daughters"):
+            canonical = int(canonical)
+        elif field == "annual_income":
+            canonical = int(float(str(canonical).replace(",", "")))
+        elif field == "land_acres":
+            canonical = float(canonical)
+        elif field in ("has_bpl", "has_disability", "has_bank_account"):
+            if isinstance(canonical, str):
+                canonical = canonical.lower() in ("true", "yes", "1", "हाँ", "हां")
+            else:
+                canonical = bool(canonical)
+    except (ValueError, TypeError):
+        return False, None
+
+    return True, canonical
+
+
 def extract_profile_updates(
     user_message: str,
     current_profile: dict,
@@ -397,64 +531,58 @@ def extract_profile_updates(
     """
     Extract structured profile fields from a free-text message.
 
-    context_field: the field name that was last asked by the agent. When
-    provided, bare answers like "18" or "yes" are interpreted correctly.
+    Three-tier strategy
+    -------------------
+    Tier 1 — Regex (always runs, no API cost):
+        Handles all known/hardcoded values for every field.
+        If regex finds a value for context_field → done, return immediately.
 
-    Strategy:
-    1. Always run the regex extractor (fast, no API needed).
-    2. If an LLM API key is configured, also run the LLM extractor and
-       merge its results (LLM wins for fields it found that regex missed).
-    3. Return merged updates.
+    Tier 2 — Groq validation (only when regex finds NOTHING for context_field
+              AND an LLM_API_KEY is configured):
+        Ask the LLM: "is this a valid value for field X?"
+        • LLM says YES  → store the canonical value it returns.
+        • LLM says NO   → return {"__invalid__": True} so the UI can re-ask.
+
+    Tier 3 — No API key and regex found nothing:
+        Accept the raw input as-is (graceful degradation, same as before).
+
+    The special key "__invalid__" is a signal to the caller (app.py) to
+    re-ask the same question with a friendly validation error message.
     """
-    # Always try the regex extractor first (with context so bare answers work)
+    has_api_key = bool(os.getenv("LLM_API_KEY", "").strip())
+
+    # ── Tier 1: regex ─────────────────────────────────────────────────────────
     regex_updates = _regex_extract(user_message, context_field)
 
-    # Try LLM if key is available
-    llm_updates: dict = {}
-    if os.getenv("LLM_API_KEY", "").strip():
-        prompt = _EXTRACT_PROMPT.format(message=user_message)
-        try:
-            raw = chat_completion(
-                messages=[{"role": "user", "content": prompt}],
-                system_prompt="",
-                temperature=0.0,
-                max_tokens=300,
-            )
-            raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
-            m = re.search(r"\{.*\}", raw, re.DOTALL)
-            if m:
-                updates = json.loads(m.group())
-                for key, val in updates.items():
-                    if key not in PROFILE_FIELDS:
-                        continue
-                    if key in ("age", "num_daughters") and val is not None:
-                        try:
-                            llm_updates[key] = int(val)
-                        except (ValueError, TypeError):
-                            pass
-                    elif key == "annual_income" and val is not None:
-                        try:
-                            llm_updates[key] = int(float(str(val).replace(",", "")))
-                        except (ValueError, TypeError):
-                            pass
-                    elif key == "land_acres" and val is not None:
-                        try:
-                            llm_updates[key] = float(val)
-                        except (ValueError, TypeError):
-                            pass
-                    elif key in ("has_bpl", "has_disability", "has_bank_account"):
-                        if isinstance(val, bool):
-                            llm_updates[key] = val
-                        elif isinstance(val, str):
-                            llm_updates[key] = val.lower() in ("true", "yes", "हाँ", "हां", "1")
-                    else:
-                        llm_updates[key] = val
-        except Exception:
-            pass  # LLM unavailable — regex results are still used
+    # If regex already found a value for the field currently being asked,
+    # we're done — no LLM needed.
+    if context_field and context_field in regex_updates:
+        return regex_updates
 
-    # Merge: regex base, then LLM overrides where it found something
-    merged = {**regex_updates, **llm_updates}
-    return merged
+    # ── Tier 2: LLM validation for unknown input ──────────────────────────────
+    # Only triggered when:
+    #   • we know which field was being asked (context_field is set)
+    #   • regex found nothing for that field
+    #   • the user actually typed something (not empty)
+    #   • an API key is configured
+    raw_input = user_message.strip()
+    if context_field and raw_input and has_api_key:
+        is_valid, canonical = _llm_validate_field(context_field, raw_input)
+        if is_valid:
+            # Merge: start with whatever regex found for other fields, then
+            # add the LLM-validated value for context_field.
+            return {**regex_updates, context_field: canonical}
+        else:
+            # The LLM says the input is wrong for this field.
+            # Signal the UI to re-ask the question with a validation error.
+            return {"__invalid__": True}
+
+    # ── Tier 3: no API key, regex found nothing for context_field ────────────
+    # Graceful degradation: accept the raw input as the field value so the
+    # conversation can still progress (no validation, but no infinite loop).
+    if context_field and raw_input and context_field not in regex_updates:
+        regex_updates[context_field] = user_message.strip()
+    return regex_updates
 
 
 # ──────────────────────────────────────────────────────────────────────────────

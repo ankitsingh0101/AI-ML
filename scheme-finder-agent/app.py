@@ -377,6 +377,27 @@ if user_input := st.chat_input(placeholder):
                 updates = ag.extract_profile_updates(
                     user_input, st.session_state.profile, context_field
                 )
+
+                # ── Invalid input: LLM rejected the answer ───────────────────
+                # Re-ask the exact same question with a friendly error message.
+                # Do NOT advance last_asked_field — keep it on the same field.
+                if updates.get("__invalid__"):
+                    questions_map = ag._QUESTIONS_HI if lang == "Hindi" else ag._QUESTIONS_EN
+                    same_q = questions_map.get(context_field, "")
+                    if lang == "Hindi":
+                        retry_msg = (
+                            f"⚠️ वह जवाब **{context_field}** के लिए सही नहीं लगता। "
+                            f"कृपया सही जानकारी दें।\n\n{same_q}"
+                        )
+                    else:
+                        retry_msg = (
+                            f"⚠️ That doesn't look like a valid **{context_field.replace('_', ' ')}**. "
+                            f"Please enter a correct value.\n\n{same_q}"
+                        )
+                    st.markdown(retry_msg)
+                    _add_message("assistant", retry_msg)
+                    st.stop()
+
                 if updates:
                     st.session_state.profile.update(updates)
 
