@@ -212,7 +212,7 @@ with st.sidebar:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Main area — header
+# Main area — header + progress bar
 # ──────────────────────────────────────────────────────────────────────────────
 
 col1, col2 = st.columns([3, 1])
@@ -223,6 +223,17 @@ with col1:
     else:
         st.title("🇮🇳 Scheme Finder")
         st.caption("Indian Government Welfare Schemes — Personalised for You")
+
+# ── Progress bar (shown only while profile is being collected) ────────────────
+if st.session_state.greeted and st.session_state.match_results is None:
+    answered = ag.count_answered_fields(st.session_state.profile)
+    total = ag.TOTAL_PROFILE_FIELDS
+    pct = min(answered / total, 1.0)
+    if st.session_state.language == "Hindi":
+        st.caption(f"प्रोफ़ाइल: {answered}/{total} प्रश्न पूर्ण")
+    else:
+        st.caption(f"Profile: {answered} of {total} questions answered")
+    st.progress(pct)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Scheme of the day
@@ -270,8 +281,18 @@ if not st.session_state.greeted:
 # Match results display (rendered once match is available)
 # ──────────────────────────────────────────────────────────────────────────────
 
+# Global render call counter — ensures widget keys are unique across multiple
+# calls to _render_match_results in the same Streamlit run (persisted results
+# block + live results block can both be rendered in the same rerun).
+_render_call_counter = 0
+
+
 def _render_match_results(results: dict, language: str) -> None:
     """Render eligible and possibly-eligible schemes as expandable cards."""
+    global _render_call_counter
+    _render_call_counter += 1
+    _rc = _render_call_counter  # snapshot for this call's widget keys
+
     eligible = results.get("eligible", [])
     possibly = results.get("possibly_eligible", [])
 
@@ -307,8 +328,8 @@ def _render_match_results(results: dict, language: str) -> None:
                 docs = s.get("documents", [])
                 if docs:
                     st.markdown(f"**{'आवश्यक दस्तावेज़' if language == 'Hindi' else 'Documents Required'}:**")
-                    for d in docs:
-                        st.checkbox(d, key=f"doc_{s['id']}_{d[:20]}", disabled=False)
+                    for idx, d in enumerate(docs):
+                        st.checkbox(d, key=f"doc_{_rc}_{s['id']}_{idx}", disabled=False)
                 st.divider()
 
                 # How to apply
@@ -524,7 +545,9 @@ if user_input := st.chat_input(placeholder):
 
                 # ── Step 2: Use UPDATED profile for all decisions ─────────────
                 profile = st.session_state.profile
-                next_q, next_field = ag.decide_next_question(profile, lang)
+                next_q, next_field = ag.decide_next_question(
+                    profile, lang, st.session_state.schemes
+                )
 
                 # Store the field we're about to ask so next turn has context
                 st.session_state.last_asked_field = next_field
@@ -538,12 +561,94 @@ if user_input := st.chat_input(placeholder):
                     for f in ["age", "gender", "state", "occupation", "annual_income"]
                 )
 
-                if has_core:
+                # ── Detect if user is asking a question rather than answering ─
+                # Once we have core profile fields AND already have match results,
+                # any message that looks like a question or mentions a scheme not
+                # in the local DB should be treated as a follow-up, not a profile
+                # answer — even if next_q is still pending.
+                _question_signals = (
+                    "?" in user_input
+                    or user_input.strip().lower().startswith(("what", "how", "when",
+                        "where", "who", "which", "tell me", "explain", "i want",
+                        "can i", "am i", "do i", "is there", "are there",
+                        "क्या", "कैसे", "कब", "कहाँ", "बताओ", "मुझे",
+                    ))
+                )
+                _scheme_question_keywords = {
+                    "scheme", "yojana", "portal", "benefit", "apply",
+                    "subsidy", "grant", "pension", "insurance", "welfare",
+                    "new scheme", "latest", "recently", "launched", "नई योजना",
+                }
+                _mentions_scheme_topic = any(
+                    kw in user_input.lower() for kw in _scheme_question_keywords
+                )
+                _already_matched = st.session_state.match_results is not None
+                is_followup_question = (
+                    _already_matched
+                    and (_question_signals or _mentions_scheme_topic)
+                    and not updates   # user didn't provide new profile data
+                )
+
+                if is_followup_question:
+                    # Route to answer_followup even if next_q is still pending
+                    history = st.session_state.messages[:-1]
+                    answer = ag.answer_followup(
+                        user_input,
+                        profile,
+                        st.session_state.match_results or {},
+                        lang,
+                        history,
+                    )
+                    st.markdown(answer)
+                    _add_message("assistant", answer)
+                    _save_to_storage()
+
+                elif has_core:
+                    prev_results = st.session_state.match_results
                     results = match_schemes(profile, st.session_state.schemes)
                     st.session_state.match_results = results
 
                     eligible_count = len(results.get("eligible", []))
                     possibly_count = len(results.get("possibly_eligible", []))
+
+                    # ── Scheme-change explanation ─────────────────────────────
+                    # When the results have changed since the last run, tell the
+                    # user what moved and why (not just show new count silently).
+                    change_note = ""
+                    if prev_results is not None:
+                        prev_eligible_ids = {
+                            item["scheme"]["id"]
+                            for item in prev_results.get("eligible", [])
+                        }
+                        new_eligible_ids = {
+                            item["scheme"]["id"]
+                            for item in results.get("eligible", [])
+                        }
+                        gained = new_eligible_ids - prev_eligible_ids
+                        lost   = prev_eligible_ids - new_eligible_ids
+
+                        gained_names = [
+                            item["scheme"]["name"]
+                            for item in results["eligible"]
+                            if item["scheme"]["id"] in gained
+                        ]
+                        lost_names = [
+                            item["scheme"]["name"]
+                            for item in prev_results.get("eligible", [])
+                            if item["scheme"]["id"] in lost
+                        ]
+
+                        if gained_names or lost_names:
+                            if lang == "Hindi":
+                                if gained_names:
+                                    change_note += "\n\n✅ **नई योजनाएं जोड़ी गईं:** " + ", ".join(gained_names)
+                                if lost_names:
+                                    change_note += "\n\n❌ **हटाई गई योजनाएं** (आपके प्रोफ़ाइल के अनुसार पात्र नहीं): " + ", ".join(lost_names)
+                            else:
+                                if gained_names:
+                                    change_note += "\n\n✅ **Newly eligible:** " + ", ".join(gained_names)
+                                if lost_names:
+                                    change_note += "\n\n❌ **Removed** (not eligible given your answer): " + ", ".join(lost_names)
 
                     if lang == "Hindi":
                         summary = (
@@ -551,6 +656,7 @@ if user_input := st.chat_input(placeholder):
                             f"मुझे आपके लिए **{eligible_count}** योजनाएं मिलीं जिनके लिए आप **पात्र** हैं"
                             + (f", और **{possibly_count}** और जिनके लिए थोड़ी और जानकारी चाहिए।" if possibly_count else "।")
                             + "\n\nनीचे विस्तार से देखें। 👇"
+                            + change_note
                         )
                     else:
                         summary = (
@@ -558,10 +664,18 @@ if user_input := st.chat_input(placeholder):
                             f"I found **{eligible_count}** scheme(s) you are **eligible** for"
                             + (f", and **{possibly_count}** more where a little more info is needed." if possibly_count else ".")
                             + "\n\nSee the details below 👇"
+                            + change_note
                         )
 
                     if next_q:
-                        summary += f"\n\n{next_q}"
+                        # Show progress step in the question itself
+                        answered = ag.count_answered_fields(profile)
+                        total = ag.TOTAL_PROFILE_FIELDS
+                        step_label = (
+                            f"*(प्रश्न {answered + 1}/{total})* " if lang == "Hindi"
+                            else f"*(Question {answered + 1}/{total})* "
+                        )
+                        summary += f"\n\n{step_label}{next_q}"
 
                     st.markdown(summary)
                     _add_message("assistant", summary)
@@ -569,12 +683,19 @@ if user_input := st.chat_input(placeholder):
                     _render_match_results(results, lang)
 
                 elif next_q:
-                    reply = (ack + "\n\n" if ack else "") + next_q
+                    # Add step counter to every question during profiling
+                    answered = ag.count_answered_fields(profile)
+                    total = ag.TOTAL_PROFILE_FIELDS
+                    step_label = (
+                        f"*(प्रश्न {answered + 1}/{total})* " if lang == "Hindi"
+                        else f"*(Question {answered + 1}/{total})* "
+                    )
+                    reply = (ack + "\n\n" if ack else "") + step_label + next_q
                     st.markdown(reply)
                     _add_message("assistant", reply)
                     _save_to_storage()   # profile field captured, next question stored
                 else:
-                    # Profile seems complete; answer as follow-up
+                    # Profile complete and no pending questions; answer as follow-up
                     history = st.session_state.messages[:-1]  # exclude current user msg
                     answer = ag.answer_followup(
                         user_input,

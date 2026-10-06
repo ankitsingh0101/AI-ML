@@ -35,6 +35,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ml_scorer import score_schemes as _ml_score
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
@@ -282,6 +284,31 @@ def _check_scheme(profile: dict, scheme: dict) -> tuple[str, list[str], list[str
             else:
                 reasons.append(f"Number of daughters ({nd}) qualifies. ✓")
 
+    # ── Ayushman Bharat: BPL families OR all citizens aged 70+ ───────────────
+    if scheme.get("id") == "ayushman_bharat":
+        age = profile.get("age")
+        has_bpl = profile.get("has_bpl")
+        age_known = age is not None
+        bpl_known = has_bpl is not None
+
+        if age_known and int(age) >= 70:
+            # Sept 2024 expansion: all 70+ covered regardless of BPL
+            reasons.append("You are 70 or older — covered under the 2024 Ayushman Bharat expansion for all senior citizens. ✓")
+        elif bpl_known and has_bpl:
+            reasons.append("BPL card holder — eligible for Ayushman Bharat. ✓")
+        elif bpl_known and not has_bpl and (not age_known or int(age) < 70):
+            hard_fail = True
+            reasons.append(
+                "Ayushman Bharat requires either a BPL card OR age 70+. "
+                "You do not meet either condition based on your profile."
+            )
+        else:
+            # age or BPL unknown — need more info
+            if not age_known:
+                missing.append("age")
+            if not bpl_known:
+                missing.append("has_bpl")
+
     # ── e-Shram: unorganised sector check ────────────────────────────────────
     if scheme.get("id") == "e_shram":
         if not _missing_key(profile, "occupation"):
@@ -308,8 +335,17 @@ def _check_scheme(profile: dict, scheme: dict) -> tuple[str, list[str], list[str
             else:
                 reasons.append("You have a bank account. ✓")
 
-    # ── PM Jan Dhan: does NOT require a bank account (provides one) ───────────
-    # No additional checks needed.
+    # ── PM Jan Dhan: only for those WITHOUT an existing bank account ──────────
+    if scheme.get("id") == "pm_jan_dhan":
+        if _missing_key(profile, "has_bank_account"):
+            missing.append("has_bank_account")
+        elif profile.get("has_bank_account"):
+            hard_fail = True
+            reasons.append(
+                "PM Jan Dhan Yojana is for people who do not yet have a bank account. "
+                "You already have one, so you don't need to open a PMJDY account — "
+                "but you can still benefit from RuPay insurance if your account is a Jan Dhan account."
+            )
 
     # ── Determine final status ───────────────────────────────────────────────
     if hard_fail:
@@ -355,25 +391,11 @@ def match_schemes(profile: dict, schemes: list) -> dict:
         }
         result[status].append(entry)
 
-    # Sort eligible by benefit value heuristic (favour schemes with numeric amounts)
-    def _benefit_rank(item: dict) -> int:
-        benefit = item["scheme"].get("benefit", "").lower()
-        # Higher cash benefits first
-        if "5 lakh" in benefit:
-            return 0
-        if "lakh" in benefit:
-            return 1
-        if "6,000" in benefit or "6000" in benefit:
-            return 2
-        if "5,000" in benefit or "5000" in benefit:
-            return 3
-        if "1,250" in benefit or "1250" in benefit:
-            return 4
-        if "pension" in benefit:
-            return 5
-        return 10
-
-    result["eligible"].sort(key=_benefit_rank)
-    result["possibly_eligible"].sort(key=_benefit_rank)
+    # ── ML-based relevance ranking ────────────────────────────────────────────
+    # TF-IDF + cosine similarity scores each eligible/possibly-eligible scheme
+    # against the user's profile text. This replaces the old hardcoded benefit
+    # heuristic with a data-driven ranking that adapts to the user's situation.
+    result["eligible"] = _ml_score(result["eligible"], profile)
+    result["possibly_eligible"] = _ml_score(result["possibly_eligible"], profile)
 
     return result

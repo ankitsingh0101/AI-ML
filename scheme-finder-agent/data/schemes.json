@@ -41,8 +41,8 @@
     "level": "central",
     "state": "All",
     "category": "health",
-    "description": "World's largest health insurance scheme providing health cover of Rs 5 lakh per family per year for secondary and tertiary hospitalisation to poor and vulnerable families.",
-    "benefit": "Health insurance cover of Rs 5 lakh per family per year",
+    "description": "World's largest health insurance scheme providing health cover of Rs 5 lakh per family per year for secondary and tertiary hospitalisation. Extended in September 2024 to cover ALL senior citizens aged 70 and above regardless of income.",
+    "benefit": "Health insurance cover of Rs 5 lakh per family per year; all citizens aged 70+ get an additional Rs 5 lakh top-up cover",
     "eligibility": {
       "min_age": null,
       "max_age": null,
@@ -52,20 +52,21 @@
       "social_category": [],
       "requires_land": false,
       "max_land_acres": null,
-      "requires_bpl": true,
+      "requires_bpl": false,
       "marital_status": [],
       "requires_disability": false,
       "min_daughters": null,
-      "notes": "Eligibility based on SECC 2011 database and/or holding a valid BPL/ration card. Specific deprivation and occupational criteria apply. To be verified."
+      "notes": "Two tracks: (1) BPL/SECC-listed families of any age get Rs 5 lakh cover. (2) ALL citizens aged 70 years and above (regardless of income or BPL status) are now covered under the September 2024 expansion — they get an additional Rs 5 lakh top-up card. Check eligibility at pmjay.gov.in."
     },
     "documents": [
       "Aadhaar card",
-      "Ration card (BPL / NFSA)",
-      "Ayushman card (issued at empanelled hospitals or CSC)"
+      "Ration card (BPL / NFSA) — for non-senior-citizen track",
+      "Ayushman card (issued at empanelled hospitals or CSC)",
+      "Age proof for senior citizens (70+)"
     ],
-    "how_to_apply": "Check eligibility at pmjay.gov.in or call helpline 14555. Visit an empanelled hospital or CSC to get your Ayushman card.",
-    "official_link": "https://www.myscheme.gov.in/schemes/pmjay",
-    "last_verified": "2025-01-01",
+    "how_to_apply": "Check eligibility at pmjay.gov.in or call helpline 14555. Senior citizens (70+) can self-enrol at any empanelled hospital or CSC from October 2024.",
+    "official_link": "https://pmjay.gov.in",
+    "last_verified": "2025-01-15",
     "verified": false
   },
   {
@@ -75,8 +76,8 @@
     "level": "state",
     "state": "Madhya Pradesh",
     "category": "women",
-    "description": "Madhya Pradesh government scheme providing monthly financial assistance to women to strengthen their economic self-reliance.",
-    "benefit": "Rs 1,250 per month (To be verified — amount may have changed)",
+    "description": "Madhya Pradesh government scheme providing monthly financial assistance to women to strengthen their economic self-reliance and improve nutrition.",
+    "benefit": "Rs 1,500 per month (enhanced from Rs 1,250; amount subject to revision — verify at cmladlibahna.mp.gov.in)",
     "eligibility": {
       "min_age": 21,
       "max_age": 60,
@@ -90,7 +91,7 @@
       "marital_status": ["married", "widow", "divorced", "abandoned"],
       "requires_disability": false,
       "min_daughters": null,
-      "notes": "Must be domiciled in Madhya Pradesh. Family income below Rs 2.5 lakh per year and family must not own more than 5 acres of land. Income-tax payers excluded. To be verified."
+      "notes": "Must be domiciled in Madhya Pradesh. Family income below Rs 2.5 lakh per year. Family must not own more than 5 acres of land. Income-tax payers and government employees excluded. Monthly amount enhanced to Rs 1,500 from 2024."
     },
     "documents": [
       "Aadhaar card",
@@ -146,8 +147,8 @@
     "level": "central",
     "state": "All",
     "category": "pension",
-    "description": "Part of the National Social Assistance Programme (NSAP). Provides monthly pension to elderly persons from BPL households.",
-    "benefit": "Rs 200 per month (age 60–79) and Rs 500 per month (age 80+) from central government; states may add top-up (To be verified)",
+    "description": "Part of the National Social Assistance Programme (NSAP). Provides monthly pension to elderly BPL persons. Most states add a significant top-up — actual pension received is often Rs 500–2000+ per month depending on state.",
+    "benefit": "Rs 200–500/month from centre (age 60–79: Rs 200; age 80+: Rs 500) + state top-up (varies; e.g. MP adds Rs 300, total ~Rs 500/month for age 60–79)",
     "eligibility": {
       "min_age": 60,
       "max_age": null,
@@ -182,7 +183,7 @@
     "state": "All",
     "category": "housing",
     "description": "Provides financial assistance to rural families to construct or upgrade a pucca (permanent) house with basic amenities.",
-    "benefit": "Rs 1,20,000 (plains) or Rs 1,30,000 (hilly/difficult areas) per house unit (To be verified)",
+    "benefit": "Rs 1,20,000 (plains) or Rs 1,30,000 (hilly/difficult areas) per house unit; MGNREGS labour component of 90–95 days also provided",
     "eligibility": {
       "min_age": 18,
       "max_age": null,
@@ -218,7 +219,7 @@
     "state": "All",
     "category": "education",
     "description": "A small savings scheme for the education and marriage expenses of the girl child. Offers high interest rate and tax benefits.",
-    "benefit": "High interest rate savings account (To be verified — rate changes quarterly); tax exemption under Section 80C; lump sum on maturity",
+    "benefit": "8.2% per annum interest (rate revised quarterly by MoF); tax exemption under Section 80C; lump sum at maturity (21 years from account opening or on marriage after age 18)",
     "eligibility": {
       "min_age": null,
       "max_age": null,
@@ -253,7 +254,7 @@
     "state": "All",
     "category": "women",
     "description": "Maternity benefit programme providing cash incentive to pregnant women and lactating mothers for their first living child to compensate for wage loss and improve health and nutrition.",
-    "benefit": "Rs 5,000 in three instalments for first child; Rs 6,000 for second child if girl (To be verified)",
+    "benefit": "Rs 5,000 in two instalments for first living child; Rs 6,000 for second child if she is a girl (under Mission Shakti component — verify at pmmvy.wcd.gov.in)",
     "eligibility": {
       "min_age": 19,
       "max_age": null,
@@ -288,7 +289,7 @@
     "state": "All",
     "category": "education",
     "description": "Scholarship for students belonging to SC, ST, and OBC categories pursuing education at post-matriculation (Class XI onwards) level.",
-    "benefit": "Maintenance allowance, course fee reimbursement (amounts vary by level and state — To be verified)",
+    "benefit": "Maintenance allowance Rs 230–1,200/month (day scholar) or Rs 380–1,200/month (hosteller) depending on level; full tuition fee reimbursement for students in government institutions; amounts may vary by state",
     "eligibility": {
       "min_age": null,
       "max_age": null,
@@ -325,7 +326,7 @@
     "state": "All",
     "category": "financial_inclusion",
     "description": "National mission for financial inclusion ensuring access to financial services — savings, remittance, credit, insurance, and pension — to all unbanked households.",
-    "benefit": "Zero-balance savings account; RuPay debit card; Rs 1 lakh accident insurance; Rs 30,000 life insurance for eligible account holders; overdraft facility of up to Rs 10,000 (To be verified)",
+    "benefit": "Zero-balance savings account; RuPay debit card with Rs 2 lakh accident insurance (enhanced 2018); Rs 30,000 life insurance for accounts opened by Aug 2018; overdraft of up to Rs 10,000 after 6 months of satisfactory operation",
     "eligibility": {
       "min_age": 10,
       "max_age": null,

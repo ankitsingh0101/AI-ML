@@ -25,6 +25,7 @@ from typing import Any
 
 from llm import chat_completion
 from matcher import match_schemes
+from web_search import search_schemes, format_search_results
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Scheme data
@@ -589,9 +590,12 @@ def extract_profile_updates(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Next question logic
+# Next question logic  (ML-informed smart prioritisation)
 # ──────────────────────────────────────────────────────────────────────────────
 
+# Ordered list of ALL profile fields.  decide_next_question dynamically skips
+# fields that cannot affect any remaining possibly-eligible scheme, so the user
+# is never asked irrelevant questions.
 _NEXT_QUESTION_PRIORITY = [
     "state",
     "age",
@@ -607,12 +611,15 @@ _NEXT_QUESTION_PRIORITY = [
     "has_bank_account",
 ]
 
+# Total number of questions that could ever be asked (used for progress bar).
+TOTAL_PROFILE_FIELDS = len(_NEXT_QUESTION_PRIORITY)
+
 _QUESTIONS_EN = {
-    "state": "Which state do you live in? (Default is Madhya Pradesh if you're not sure.)",
+    "state": "Which state do you live in? (e.g. Madhya Pradesh, Rajasthan, Delhi)",
     "age": "How old are you?",
     "gender": "Are you male or female?",
-    "occupation": "What is your main occupation? For example: farmer, student, daily-wage worker, homemaker, self-employed, unemployed?",
-    "annual_income": "What is your family's total annual income? (Approximate amount in rupees is fine.)",
+    "occupation": "What is your main occupation? (e.g. farmer, student, daily-wage worker, homemaker, self-employed, unemployed)",
+    "annual_income": "What is your family's total annual income? (Approximate rupees — e.g. 80000)",
     "social_category": "What is your social category? General, OBC, SC, or ST?",
     "marital_status": "Are you married, unmarried, widowed, or divorced?",
     "has_bpl": "Do you have a BPL (Below Poverty Line) ration card? (Yes/No)",
@@ -623,11 +630,11 @@ _QUESTIONS_EN = {
 }
 
 _QUESTIONS_HI = {
-    "state": "आप किस राज्य में रहते हैं? (अगर आप निश्चित नहीं हैं तो मध्य प्रदेश डिफ़ॉल्ट है।)",
+    "state": "आप किस राज्य में रहते हैं? (जैसे मध्य प्रदेश, राजस्थान, दिल्ली)",
     "age": "आपकी उम्र क्या है?",
     "gender": "आप पुरुष हैं या महिला?",
-    "occupation": "आपका मुख्य व्यवसाय क्या है? जैसे: किसान, छात्र, दिहाड़ी मजदूर, गृहिणी, स्व-रोजगार, बेरोजगार?",
-    "annual_income": "आपके परिवार की कुल वार्षिक आय कितनी है? (लगभग राशि रुपये में बताएं।)",
+    "occupation": "आपका मुख्य व्यवसाय क्या है? (जैसे किसान, छात्र, दिहाड़ी मजदूर, गृहिणी, स्व-रोजगार, बेरोजगार)",
+    "annual_income": "आपके परिवार की कुल वार्षिक आय कितनी है? (लगभग रुपये में — जैसे 80000)",
     "social_category": "आप किस सामाजिक श्रेणी से हैं? सामान्य, ओबीसी, एससी, या एसटी?",
     "marital_status": "आप विवाहित हैं, अविवाहित, विधवा/विधुर, या तलाकशुदा?",
     "has_bpl": "क्या आपके पास BPL (गरीबी रेखा से नीचे) राशन कार्ड है? (हाँ/नहीं)",
@@ -638,12 +645,64 @@ _QUESTIONS_HI = {
 }
 
 
+def _field_is_needed(field: str, profile: dict, schemes: list) -> bool:
+    """
+    ML-informed smart skip: returns True only if knowing this field could
+    change at least one scheme from possibly_eligible → eligible or not_eligible.
+
+    This prevents asking about disability when no scheme in our DB requires it
+    for the user's current profile, asking about land_acres for a shopkeeper, etc.
+
+    Works by simulating two hypothetical answers (True/False or a sentinel value)
+    and checking whether the match result changes for any scheme.
+    """
+    from matcher import match_schemes as _match
+
+    # Fields that are always needed for core matching — never skip these
+    _CORE_FIELDS = {"state", "age", "gender", "occupation", "annual_income"}
+    if field in _CORE_FIELDS:
+        return True
+
+    # Build a base profile with the field deliberately set to None
+    base = {k: v for k, v in profile.items() if k != field}
+    base[field] = None
+
+    # Get baseline possibly_eligible set without the field
+    base_result = _match(base, schemes)
+    possibly_ids = {
+        item["scheme"]["id"]
+        for item in base_result["possibly_eligible"]
+        if field in item.get("missing", [])
+    }
+
+    # If no scheme is waiting on this field, skip the question
+    return len(possibly_ids) > 0
+
+
+def count_answered_fields(profile: dict) -> int:
+    """Count how many of the standard profile fields have been answered."""
+    answered = 0
+    for field in _NEXT_QUESTION_PRIORITY:
+        val = profile.get(field)
+        if val is not None and not (isinstance(val, str) and val.strip() == ""):
+            answered += 1
+    return answered
+
+
 def decide_next_question(
-    profile: dict, language: str = "English"
+    profile: dict,
+    language: str = "English",
+    schemes: list | None = None,
 ) -> tuple[str | None, str | None]:
     """
     Returns (question_text, field_key) for the next most useful question,
     or (None, None) if the profile is sufficiently complete.
+
+    Smart skipping (ML-informed):
+    - land_acres: only asked if occupation is farmer/agricultural labourer
+    - num_daughters: only asked if gender is female
+    - Any other optional field: only asked if it would change a match result
+      for at least one currently possibly-eligible scheme (uses _field_is_needed)
     """
     questions = _QUESTIONS_HI if language == "Hindi" else _QUESTIONS_EN
     occ = _norm_str(profile.get("occupation"))
@@ -655,7 +714,8 @@ def decide_next_question(
         if not is_missing:
             continue
 
-        # Skip land_acres unless occupation is farmer
+        # ── Hard conditional skips ────────────────────────────────────────────
+        # Skip land_acres unless occupation is farmer / agricultural labourer
         if field == "land_acres":
             if occ and occ not in ("farmer", "agricultural labourer"):
                 continue
@@ -664,6 +724,22 @@ def decide_next_question(
         if field == "num_daughters":
             gender = _norm_str(profile.get("gender"))
             if gender and gender != "female":
+                continue
+
+        # ── ML-informed dynamic skip ──────────────────────────────────────────
+        # Only skip optional fields when we already have enough profile info
+        # to make a meaningful possibly-eligible comparison (need at least the
+        # core fields filled in so match_schemes has something to work with).
+        _optional_fields = {
+            "social_category", "marital_status", "has_bpl",
+            "has_disability", "has_bank_account",
+        }
+        if field in _optional_fields and schemes is not None:
+            has_core = all(
+                profile.get(f) is not None
+                for f in ["age", "gender", "state", "occupation", "annual_income"]
+            )
+            if has_core and not _field_is_needed(field, profile, schemes):
                 continue
 
         return questions.get(field), field
@@ -806,40 +882,132 @@ def answer_followup(
     conversation_history: list[dict] | None = None,
 ) -> str:
     """
-    Answer a follow-up question about schemes using only the scheme data.
+    Answer a follow-up question about schemes.
+
+    Strategy:
+    1. If the question is clearly about a scheme not in the local DB, go
+       directly to web search (skip the LLM entirely for unknown schemes).
+    2. Otherwise try to answer from the local scheme database using the LLM.
+    3. If the LLM says it doesn't have the info, OR the question looks like an
+       unknown scheme, perform a live DuckDuckGo web search and append results.
+    4. If no API key is configured, fall back to web search only.
     """
     schemes = load_schemes()
-    # Compact scheme data for context (omit verbose fields)
-    scheme_summaries = []
-    for s in schemes:
-        scheme_summaries.append({
-            "id": s["id"],
-            "name": s["name"],
-            "name_hi": s.get("name_hi", ""),
-            "benefit": s.get("benefit", ""),
-            "documents": s.get("documents", []),
-            "how_to_apply": s.get("how_to_apply", ""),
-            "official_link": s.get("official_link", ""),
-            "eligibility_notes": s.get("eligibility", {}).get("notes", ""),
-        })
+    local_scheme_names = {s["name"].lower() for s in schemes}
+    local_scheme_ids   = {s["id"].lower() for s in schemes}
 
-    system = get_system_prompt(language)
-    context = (
-        f"Scheme database (JSON):\n{json.dumps(scheme_summaries, ensure_ascii=False, indent=2)}\n\n"
-        f"User profile: {json.dumps(profile, ensure_ascii=False)}\n\n"
-        "Answer the user's question using ONLY the information above. "
-        "If you cannot find the answer in the scheme data, say so and direct to myScheme.gov.in."
+    q_lower = question.lower()
+
+    # ── Detect if the question is about an unknown/new scheme ────────────────
+    # Trigger web search directly if the question mentions scheme-related words
+    # but none of the known scheme names or IDs appear in it.
+    _scheme_keywords = {
+        "scheme", "yojana", "portal", "benefit", "application", "apply",
+        "subsidy", "grant", "pension", "insurance", "welfare", "government",
+        "new scheme", "latest scheme", "नई योजना", "नई स्कीम", "government scheme",
+    }
+    question_mentions_scheme = any(kw in q_lower for kw in _scheme_keywords)
+    question_mentions_local = (
+        any(name in q_lower for name in local_scheme_names)
+        or any(sid in q_lower for sid in local_scheme_ids)
+    )
+    question_is_about_unknown_scheme = question_mentions_scheme and not question_mentions_local
+
+    # If no API key available, skip LLM and go straight to web search
+    has_api_key = bool(os.getenv("LLM_API_KEY", "").strip())
+
+    llm_answer = ""
+    if has_api_key:
+        # Compact scheme data for context (omit verbose fields)
+        scheme_summaries = []
+        for s in schemes:
+            scheme_summaries.append({
+                "id": s["id"],
+                "name": s["name"],
+                "name_hi": s.get("name_hi", ""),
+                "benefit": s.get("benefit", ""),
+                "documents": s.get("documents", []),
+                "how_to_apply": s.get("how_to_apply", ""),
+                "official_link": s.get("official_link", ""),
+                "eligibility_notes": s.get("eligibility", {}).get("notes", ""),
+            })
+
+        system = get_system_prompt(language)
+        context = (
+            f"Scheme database (JSON):\n{json.dumps(scheme_summaries, ensure_ascii=False, indent=2)}\n\n"
+            f"User profile: {json.dumps(profile, ensure_ascii=False)}\n\n"
+            "Answer the user's question using the information above. "
+            "If you cannot find the answer in the scheme data, explicitly say "
+            "\"I don't have that in my database\" so the system can search the web."
+        )
+
+        messages = list(conversation_history or [])
+        messages.append({"role": "user", "content": question})
+
+        try:
+            llm_answer = chat_completion(
+                messages=messages,
+                system_prompt=system + "\n\n" + context,
+                temperature=0.2,
+                max_tokens=800,
+            )
+        except Exception:
+            llm_answer = ""
+
+    # ── Detect "not in database" signals from LLM answer ─────────────────────
+    _not_found_phrases = [
+        "don't have that", "not in my database", "i don't have",
+        "not available", "cannot find", "no information",
+        "myscheme.gov.in", "check myscheme", "i don't know",
+        "मेरे पास यह जानकारी नहीं", "मुझे नहीं पता",
+        "i don't have that information",
+    ]
+    answer_lower = llm_answer.lower()
+    llm_says_not_found = any(p in answer_lower for p in _not_found_phrases)
+
+    # ── Web search: run when LLM admitted it doesn't know, OR question is
+    #    about a scheme not in our local DB, OR no API key at all ─────────────
+    should_web_search = (
+        llm_says_not_found
+        or question_is_about_unknown_scheme
+        or not has_api_key
     )
 
-    messages = list(conversation_history or [])
-    messages.append({"role": "user", "content": question})
+    if should_web_search:
+        web_results = search_schemes(question, max_results=5)
+        if web_results:
+            web_section = "\n\n---\n" + format_search_results(web_results, language)
+            if llm_answer:
+                return llm_answer + web_section
+            # No LLM answer — return web results with a preamble
+            if language == "Hindi":
+                preamble = (
+                    "यह योजना मेरे स्थानीय डेटाबेस में नहीं है। "
+                    "मैंने इंटरनेट पर खोज की — यहाँ कुछ परिणाम हैं:\n"
+                )
+            else:
+                preamble = (
+                    "This scheme is not in my local database. "
+                    "I searched the web for you — here are some results:\n"
+                )
+            return preamble + web_section
+        else:
+            # Web search returned nothing
+            if language == "Hindi":
+                fallback = (
+                    "यह योजना मेरे डेटाबेस में नहीं है और इंटरनेट खोज से भी "
+                    "कोई परिणाम नहीं मिला। कृपया **myScheme.gov.in** पर जाएं "
+                    "या अपने नज़दीकी सरकारी कार्यालय से संपर्क करें।"
+                )
+            else:
+                fallback = (
+                    "This scheme is not in my local database and the web search "
+                    "returned no results. Please visit **myScheme.gov.in** or "
+                    "contact your nearest government office for more information."
+                )
+            return (llm_answer + "\n\n" + fallback) if llm_answer else fallback
 
-    return chat_completion(
-        messages=messages,
-        system_prompt=system + "\n\n" + context,
-        temperature=0.2,
-        max_tokens=800,
-    )
+    return llm_answer
 
 
 # ──────────────────────────────────────────────────────────────────────────────

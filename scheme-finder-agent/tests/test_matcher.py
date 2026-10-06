@@ -105,12 +105,12 @@ class TestPersonaA:
             f"Expected e_shram eligible, got {r['bucket']}. Reasons: {r['reasons']}"
         )
 
-    def test_pm_jan_dhan_eligible(self):
-        """PM Jan Dhan open to all citizens with no bank-restriction criteria."""
+    def test_pm_jan_dhan_not_eligible_has_account(self):
+        """Persona A already has a bank account → PMJDY not eligible (scheme is for unbanked)."""
         r = _get_result(self.results, "pm_jan_dhan")
         assert r is not None
-        assert r["bucket"] == "eligible", (
-            f"Expected jan_dhan eligible, got {r['bucket']}"
+        assert r["bucket"] == "not_eligible", (
+            f"Expected not_eligible (already has bank account), got {r['bucket']}"
         )
 
     def test_ladli_behna_not_eligible(self):
@@ -333,11 +333,13 @@ class TestPersonaD:
         assert r is not None
         assert r["bucket"] == "not_eligible"
 
-    def test_pm_jan_dhan_eligible(self):
-        """Open to all → PM Jan Dhan eligible."""
+    def test_pm_jan_dhan_not_eligible_has_account(self):
+        """Persona D already has a bank account → PMJDY not eligible (scheme is for unbanked)."""
         r = _get_result(self.results, "pm_jan_dhan")
         assert r is not None
-        assert r["bucket"] == "eligible"
+        assert r["bucket"] == "not_eligible", (
+            f"Expected not_eligible (already has bank account), got {r['bucket']}"
+        )
 
     def test_ladli_behna_not_eligible(self):
         """Male → Ladli Behna not eligible."""

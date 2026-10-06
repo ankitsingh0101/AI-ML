@@ -188,7 +188,9 @@ def _groq(
 
     # If LLM_MODEL is explicitly set in .env, always use it as-is — the user
     # knows what they want. Only fall back when LLM_MODEL is blank/unset.
-    model = LLM_MODEL if LLM_MODEL else "qwen/qwen3.8-27b"
+    # llama3-8b-8192 is available on all Groq free-tier accounts.
+    # If your account has access to a different model, set LLM_MODEL in .env.
+    model = LLM_MODEL if LLM_MODEL else "llama3-8b-8192"
     client = Groq(api_key=LLM_API_KEY)
 
     full_messages = []

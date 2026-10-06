@@ -37,7 +37,9 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 | 🔒 Privacy-first | No server storage, no database, no cookies |
 | 🔄 Refresh-safe | Full chat + profile restored on browser refresh via URL query param |
 | 🤖 Multi-provider LLM | OpenAI · Gemini · Anthropic · Groq ⚡ |
-| ✅ Smart input validation | Regex-first; Groq only for unknown values |
+| ✅ Smart input validation | Regex-first; LLM only for unknown values |
+| 🌐 Live web search | Answers questions about new/unknown schemes via Wikipedia + DuckDuckGo |
+| 🧠 ML-ranked results | TF-IDF + cosine similarity ranks eligible schemes by relevance |
 
 ---
 
@@ -104,22 +106,29 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
 │  - decide_next_q    │────── schemes ────►│  - pure Python      │
 │  - format_results   │                    │  - deterministic    │
 │  - answer_followup  │                    └─────────────────────┘
-└──────────┬──────────┘
-           │ LLM calls (validation + explanation only)
+└──────────┬──────────┘                    ┌─────────────────────┐
+           │ LLM calls (validation +       │    ml_scorer.py     │
+           │ follow-up answers)            │  - TF-IDF ranking   │
+           │                              ─┤  - cosine similarity│
+           │ web search (new schemes)      └─────────────────────┘
            ▼
-┌──────────────────────┐       ┌────────────────────────────────┐
-│       llm.py         │──────►│  OpenAI / Gemini / Anthropic / │
-│  provider-agnostic   │       │  Groq  (qwen/qwen3.8-27b)      │
-└──────────────────────┘       └────────────────────────────────┘
+┌──────────────────────┐    ┌───────────────────────────────────┐
+│       llm.py         │───►│  OpenAI / Gemini / Anthropic /    │
+│  provider-agnostic   │    │  Groq  (llama3-8b-8192 default)   │
+└──────────────────────┘    └───────────────────────────────────┘
            │
            ▼
-┌──────────────────────┐
-│  data/schemes.json   │
-│  12 welfare schemes  │
-└──────────────────────┘
+┌──────────────────────┐    ┌───────────────────────────────────┐
+│  data/schemes.json   │    │       web_search.py               │
+│  12 welfare schemes  │    │  Wikipedia API (primary)          │
+└──────────────────────┘    │  DuckDuckGo Lite (fallback)       │
+                            │  No API key needed for either     │
+                            └───────────────────────────────────┘
 ```
 
 > **Key design principle:** The LLM is used *only* for validating unknown free-text input and explaining results. Eligibility decisions are made entirely by [`matcher.py`](matcher.py) — a transparent, auditable, rule-based engine. **No hallucinated eligibility.**
+>
+> **New scheme questions:** When a user asks about a scheme not in the local database, the agent automatically searches **Wikipedia** (primary) and **DuckDuckGo Lite** (fallback) and returns results clearly labelled as web-sourced.
 
 ---
 
@@ -130,11 +139,14 @@ scheme-finder-agent/
 ├── app.py                  # Streamlit UI — chat interface and scheme cards
 ├── agent.py                # Orchestration: profile extraction, Q&A, formatting
 ├── matcher.py              # Rule-based eligibility engine
-├── llm.py                  # Provider-agnostic LLM wrapper
+├── llm.py                  # Provider-agnostic LLM wrapper (OpenAI/Gemini/Anthropic/Groq)
+├── ml_scorer.py            # TF-IDF + cosine similarity ranking for matched schemes
+├── web_search.py           # Wikipedia + DuckDuckGo search for new/unknown scheme questions
 ├── data/
 │   └── schemes.json        # 12 government schemes database
 ├── tests/
-│   └── test_matcher.py     # Unit tests for 4 personas + edge cases
+│   ├── test_matcher.py     # Unit tests for 4 personas + edge cases (32 tests)
+│   └── test_e2e_validation.py
 ├── .env.example            # Configuration template
 ├── requirements.txt
 └── README.md
@@ -185,9 +197,12 @@ Supported providers:
 | OpenAI | `openai` | `gpt-4o-mini` | Best quality |
 | Google Gemini | `gemini` | `gemini-1.5-flash` | Good free tier |
 | Anthropic | `anthropic` | `claude-3-haiku-20240307` | Fast + cheap |
-| Groq ⚡ | `groq` | `qwen/qwen3.8-27b` | **Recommended** — 3/3 tasks correct, ~0.18s |
+| Groq ⚡ | `groq` | `llama3-8b-8192` | **Recommended** — free tier, fast |
 
-> **Groq note:** Available models differ per account. The default `qwen/qwen3.8-27b` was benchmarked against all available models for this project's validation task — it scored 3/3 correct at 0.18s average, outperforming the others. To override, set `LLM_MODEL` in `.env`. To list your account's models, run the command in `.env.example`.
+> **Groq note:** Available models differ per account. The default `llama3-8b-8192` works on all Groq free-tier accounts. To use a different model, set `LLM_MODEL` in `.env`. To list your account's models, run:
+> ```bash
+> python -c "from groq import Groq; import os; from dotenv import load_dotenv; load_dotenv(); [print(m.id) for m in Groq(api_key=os.getenv('LLM_API_KEY')).models.list().data]"
+> ```
 
 ### 5 · Run the app
 
@@ -196,6 +211,8 @@ streamlit run app.py
 ```
 
 Open **http://localhost:8501** in your browser.
+
+> **Note:** The LLM API key is required for input validation (e.g. checking if "army officer" is a valid occupation) and for answering follow-up questions. If no key is set, the app still works — it falls back to regex-only validation and web search for unknown scheme questions.
 
 ---
 
@@ -209,11 +226,10 @@ python -m pytest tests/ -v
 Expected output:
 
 ```
-tests/test_matcher.py::test_farmer_profile       PASSED
-tests/test_matcher.py::test_elderly_widow        PASSED
-tests/test_matcher.py::test_student_sc           PASSED
-tests/test_matcher.py::test_pregnant_woman       PASSED
-tests/test_matcher.py::test_no_match_edge_case   PASSED
+tests/test_matcher.py::TestPersonaA::test_result_has_three_buckets  PASSED
+tests/test_matcher.py::TestPersonaA::test_pm_kisan_eligible          PASSED
+... (32 tests total)
+================================ 32 passed ================================
 ```
 
 ---
@@ -264,6 +280,17 @@ Agent: For PM-KISAN you will need:
        • Bank account passbook
        • Mobile number linked to Aadhaar
        You can apply at pmkisan.gov.in or your nearest CSC.
+
+User:  Tell me about the new PM Surya Ghar Muft Bijli Yojana
+
+Agent: This scheme is not in my local database. I searched the web for you —
+       here are some results:
+
+       **PM Surya Ghar Muft Bijli Yojana**
+       Free electricity scheme offering 300 units/month via rooftop solar...
+       [pmsuriyaghar.gov.in](https://pmsuryaghar.gov.in)
+
+       ⚠️ Web results — always verify on the official government website.
 ```
 
 ---
@@ -291,6 +318,35 @@ Agent: For PM-KISAN you will need:
 
 ---
 
+## 🌐 How New Scheme Questions Work
+
+The local database has 12 schemes. When a user asks about **any other scheme** (e.g. a newly launched government programme), the agent automatically:
+
+1. Detects the question is about an unknown scheme (no match in local DB)
+2. Searches **Wikipedia** (primary — never bot-blocked, encyclopaedic summaries)
+3. Falls back to **DuckDuckGo Lite** if Wikipedia has no article
+4. Returns results with a clear **"verify on official site"** disclaimer
+
+```
+User asks about PM Surya Ghar / PM Vishwakarma / any new yojana
+           │
+           ▼
+   Is it in local schemes.json?
+     NO  ──────────────────────►  Wikipedia Search API
+                                         │
+                               Article found?
+                            YES ──────────────────► Wikipedia Summary
+                            NO  ──────────────────► DuckDuckGo Lite fallback
+                                         │
+                                         ▼
+                              Return results + disclaimer
+                              "Verify on official government website"
+```
+
+> **No hallucination:** The LLM is explicitly instructed to say it doesn't know when a scheme isn't in its context. The system catches that signal and supplements with Wikipedia/web results.
+
+---
+
 ## 🧠 Smart Input Validation — 3-Tier Strategy
 
 When a user answers a question, the agent processes the input through three tiers in order:
@@ -308,7 +364,7 @@ User types an answer
                     │ No match
                     ▼
 ┌─────────────────────────────────────────────────┐
-│  TIER 2 — Groq validation  (API key required)   │
+│  TIER 2 — LLM validation  (API key required)    │
 │  Asks LLM: "Is this a valid {field} value?"     │
 │  ✅ Valid  → store LLM-normalised canonical     │
 │  ❌ Invalid → re-ask with friendly error msg    │
@@ -327,7 +383,7 @@ User types an answer
 | `farmer` | occupation | Tier 1 ✅ | Stored immediately |
 | `Jharkhand` | state | Tier 1 ✅ | Stored immediately |
 | `yes` | has_bpl | Tier 1 ✅ | `true` stored |
-| `army officer` | occupation | Tier 2 ✅ | Groq validates → stored |
+| `army officer` | occupation | Tier 2 ✅ | LLM validates → stored |
 | `Chandigarh` | state | Tier 1 ✅ | UT in hardcoded list |
 | `banana123` | state | Tier 2 ❌ | "Please enter a valid state" |
 | `!!!` | occupation | Tier 2 ❌ | "Please enter a valid occupation" |
@@ -372,9 +428,12 @@ gender      ──────────────────►  gender: "
            matcher.py evaluates all rules
                     ▼
          ELIGIBLE / NOT_ELIGIBLE / MAYBE
+                    ▼
+           ml_scorer.py ranks results
+           (TF-IDF cosine similarity)
 ```
 
-Each scheme in [`data/schemes.json`](data/schemes.json) declares its eligibility rules as structured JSON. `matcher.py` evaluates them deterministically — no LLM involved, fully auditable.
+Each scheme in [`data/schemes.json`](data/schemes.json) declares its eligibility rules as structured JSON. `matcher.py` evaluates them deterministically — no LLM involved, fully auditable. `ml_scorer.py` then ranks the eligible/possibly-eligible results by relevance to the user's profile using TF-IDF cosine similarity.
 
 ---
 
@@ -408,6 +467,8 @@ Each scheme in [`data/schemes.json`](data/schemes.json) declares its eligibility
 
 7. **Sukanya Samriddhi interest rate** — Rate is revised quarterly by the government; update the benefit field regularly.
 
+8. **Web search results** — When the agent searches the web for new schemes, results come from Wikipedia and/or DuckDuckGo and are not officially verified. Always confirm on `myscheme.gov.in` or the scheme's official portal.
+
 </details>
 
 ---
@@ -418,7 +479,7 @@ Each scheme in [`data/schemes.json`](data/schemes.json) declares its eligibility
 |---|---|
 | 🚫 No sensitive data | App explicitly tells users **not to share** Aadhaar, bank details, or phone numbers |
 | 🎯 Grounded answers | LLM system prompt restricts it to answer **only from scheme data** |
-| 🌐 Unknown schemes | Agent directs users to **myScheme.gov.in** |
+| 🌐 Unknown schemes | Agent performs a **live web search** and clearly labels results as web-sourced |
 | ⚠️ Disclaimer footer | Shown on every screen |
 | 🔄 Session persistence | Chat + profile survive a browser refresh via a URL query param (`?_sfa=`) — no server-side storage, no database, no cookies |
 
