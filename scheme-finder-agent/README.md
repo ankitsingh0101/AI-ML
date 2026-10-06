@@ -114,7 +114,7 @@ No long forms. No bureaucratic jargon. No hallucinated eligibility rules.
            ▼
 ┌──────────────────────┐    ┌───────────────────────────────────┐
 │       llm.py         │───►│  OpenAI / Gemini / Anthropic /    │
-│  provider-agnostic   │    │  Groq  (llama3-8b-8192 default)   │
+│  provider-agnostic   │    │  Groq  (qwen/qwen3.8b-27b default)   │
 └──────────────────────┘    └───────────────────────────────────┘
            │
            ▼
@@ -197,9 +197,9 @@ Supported providers:
 | OpenAI | `openai` | `gpt-4o-mini` | Best quality |
 | Google Gemini | `gemini` | `gemini-1.5-flash` | Good free tier |
 | Anthropic | `anthropic` | `claude-3-haiku-20240307` | Fast + cheap |
-| Groq ⚡ | `groq` | `llama3-8b-8192` | **Recommended** — free tier, fast |
+| Groq ⚡ | `groq` | `qwen/qwen3.8b-27b` | **Recommended** — free tier, fast |
 
-> **Groq note:** Available models differ per account. The default `llama3-8b-8192` works on all Groq free-tier accounts. To use a different model, set `LLM_MODEL` in `.env`. To list your account's models, run:
+> **Groq note:** Available models differ per account. The default `qwen/qwen3.8b-27b` works on Groq free-tier accounts. To use a different model, set `LLM_MODEL` in `.env`. To list your account's models, run:
 > ```bash
 > python -c "from groq import Groq; import os; from dotenv import load_dotenv; load_dotenv(); [print(m.id) for m in Groq(api_key=os.getenv('LLM_API_KEY')).models.list().data]"
 > ```
