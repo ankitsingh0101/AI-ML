@@ -1,0 +1,273 @@
+# 🐦 Trail Birder
+
+**Identify birds by their sound, fully offline, with open-source AI.**
+
+Trail Birder listens to a bird recording, tells you which species is singing, and writes a short, friendly field-guide note about it. Everything runs on your own machine: no cloud AI API, no account, and no signal needed once the models are downloaded.
+
+Built for the [Hacktoberfest Open-Source AI Challenge, Week 1: Touch Grass](https://dev.to/challenges/hacktoberfest-week1-2026-10-05).
+
+<!-- Add a screenshot: save it as docs/screenshot.png and uncomment the line below -->
+<!-- ![Trail Birder screenshot](docs/screenshot.png) -->
+
+## Table of contents
+
+- [Why I built it](#why-i-built-it)
+- [Features](#features)
+- [How it works](#how-it-works)
+- [Open-source AI used](#open-source-ai-used)
+- [How it avoids hallucination](#how-it-avoids-hallucination)
+- [Getting started](#getting-started)
+- [Example output](#example-output)
+- [Test results](#test-results)
+- [Configuration](#configuration)
+- [Web API](#web-api)
+- [Privacy](#privacy)
+- [Project structure](#project-structure)
+- [Adding facts for a bird](#adding-facts-for-a-bird)
+- [Troubleshooting](#troubleshooting)
+- [Limitations](#limitations)
+- [Roadmap](#roadmap)
+- [Credits](#credits)
+- [License](#license)
+
+## Why I built it
+
+Most people live in cities, but birds are already around us. We just don't know who is calling. Trail Birder is meant to be used standing on a terrace, in a park, or on a trail, where a phone signal may not exist. You record a few seconds, and it tells you who is singing, then keeps a life list of everything you have heard.
+
+## Features
+
+- **Sound identification** with BirdNET, running locally.
+- **Friendly field notes** written by Gemma through Ollama, with no cloud call.
+- **Grounded notes, not made-up ones.** Gemma only rewrites facts it is given (see [How it avoids hallucination](#how-it-avoids-hallucination)).
+- **Works for any species BirdNET knows**, not just a hard-coded list.
+- **Audio playback** of the clip you upload, right in the page.
+- **Confidence bar** showing how sure the model is.
+- **Life list** that remembers every species you have heard, how often, and when.
+- **Clear "no bird" handling.** Silence or noise gives a friendly message instead of a crash.
+- **Fast repeat results.** Finished notes are cached and refresh automatically when the facts change.
+- **Dark mode** that follows your system setting.
+- **Command-line mode** as well as a web interface.
+
+## How it works
+
+```
+ audio clip ──► BirdNET (ONNX, local) ──► species + confidence per 3-second window
+                                              │
+                                    pick the most-detected species
+                                              │
+                          ┌───────────────────┴───────────────────┐
+                          ▼                                       ▼
+                  facts.json (hand-written)            Wikipedia summary (cached)
+                          └───────────────────┬───────────────────┘
+                                              ▼
+                               Gemma 3 4B via Ollama (local)
+                                              ▼
+                                  short field-guide note
+                                              ▼
+                                  life list updated
+```
+
+In more detail:
+
+1. **Listen.** BirdNET splits the audio into 3-second windows and scores every species it recognises in each one.
+2. **Filter.** Detections below 50% confidence are dropped.
+3. **Decide.** The species detected in the most windows wins. Ties are broken by the highest confidence. If nothing is left, the app says no bird was heard clearly.
+4. **Find facts.** Hand-written facts are used if they exist. Otherwise the app uses a cached Wikipedia summary, fetching it once if needed.
+5. **Write the note.** Gemma turns those facts into three short, warm sentences. The note is cached together with a fingerprint of the facts.
+6. **Remember.** The species is added to your life list with a count and date.
+
+## Open-source AI used
+
+| Part | What it does | Runs |
+|---|---|---|
+| [BirdNET](https://github.com/birdnet-team/birdnet) v3.0 (ONNX) | Identifies bird species from audio | Locally |
+| [Gemma 3 4B](https://ollama.com/library/gemma3) | Writes the field note | Locally, via [Ollama](https://ollama.com) |
+| [Flask](https://flask.palletsprojects.com) | Small web interface | Locally |
+
+## How it avoids hallucination
+
+My first version asked Gemma to describe the bird from memory. The 4B model confidently invented facts about the Asian Koel, such as claiming it mimics other birds. For a field guide that is a real problem, so I changed the design: the model is never asked to recall facts.
+
+1. **Hand-written facts first.** `facts.json` holds short facts for the birds I expect to hear. These always win.
+2. **Wikipedia as a fallback.** If a species is not in `facts.json`, the app fetches its Wikipedia summary once and caches it, so it works offline afterwards. These notes are labelled *auto-fetched, not hand-verified* and include a source link.
+3. **Gemma only rewrites.** The prompt tells the model to use only the supplied text and to add nothing else.
+4. **Fingerprinted cache.** Finished notes are saved with a hash of the facts used. If the facts change, the note is regenerated automatically.
+
+Wikipedia can be wrong too, which is why those notes are labelled as unverified.
+
+## Getting started
+
+Tested on Windows 11 with Python 3.14.
+
+### 1. Install Ollama and pull the model
+
+Install [Ollama](https://ollama.com), then:
+
+```powershell
+ollama pull gemma3:4b
+```
+
+Make sure Ollama is running. It usually starts in the background, or run `ollama serve`.
+
+### 2. Clone and set up Python
+
+```powershell
+git clone https://github.com/ankitsingh0101/Trail-birder.git
+cd Trail-birder
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+On macOS or Linux, activate with `source .venv/bin/activate`.
+
+### 3. Run the web app
+
+```powershell
+python app.py
+```
+
+Open <http://127.0.0.1:5000>, choose a recording (WAV, MP3, OGG or FLAC), and click **Identify bird**.
+
+The **first run downloads the BirdNET model (about 540 MB)**, which needs internet and can take a while on a slow connection. After that, identification works offline.
+
+### Command-line mode
+
+```powershell
+python identify.py path\to\recording.mp3
+```
+
+## Example output
+
+```
+Heard: Asian Koel (Eudynamys scolopaceus)
+Detected in 11 clips, best confidence 95%
+
+New bird for your life list! You now have 1 species.
+
+The Asian Koel's glossy blue-black plumage, pale greenish bill, and red eyes
+make it quite a sight. You heard its loud, rising "ku-oo" call, repeated again
+and again. Fun fact: koels lay their eggs in crow nests and leave the crows to
+raise the chicks.
+```
+
+<!-- Replace the note above with your real output if it differs. -->
+
+## Test results
+
+Tested with field recordings from other recordists on xeno-canto and elsewhere. I have not yet tested with my own outdoor recording.
+
+| Recording | Result | Confidence | Windows detected |
+|---|---|---|---|
+| Asian Koel (XC743612) | Asian Koel | 95% | 11 |
+| House Sparrow | House Sparrow | 75% | 12 |
+
+<!-- Add rows for the Common Myna, Indian Robin, and any noisy clip you tried, including mistakes. -->
+
+## Configuration
+
+Settings are constants at the top of `identify.py`:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `MIN_CONFIDENCE` | `0.5` | Detections below this score are ignored |
+| `OLLAMA_MODEL` | `gemma3:4b` | Model used for field notes |
+| `OLLAMA_URL` | `http://localhost:11434/api/generate` | Where Ollama is listening |
+
+The web server port is set in the last line of `app.py` (default `5000`).
+
+## Web API
+
+| Route | Method | What it does |
+|---|---|---|
+| `/` | GET | The web page |
+| `/identify` | POST | Send an audio file in a form field named `audio`. Returns JSON with `common`, `scientific`, `confidence`, `detections`, `note`, `is_new`, and `total` |
+| `/life-list` | GET | Returns your life list as JSON |
+
+Errors come back as JSON with an `error` message, for example when no bird is heard clearly or the file type is not supported.
+
+## Privacy
+
+- Your audio never leaves your computer. Uploads are saved to a temporary file, analysed, and deleted straight away.
+- BirdNET and Gemma run locally.
+- The only network requests are the one-time model downloads and, for species without hand-written facts, a one-time Wikipedia lookup that sends only the species name.
+
+## Project structure
+
+```
+Trail-birder/
+├── app.py             # Flask web interface and API
+├── identify.py        # BirdNET + facts + Gemma pipeline (also the CLI)
+├── facts.json         # Hand-written facts for common species
+├── requirements.txt   # Python dependencies
+└── README.md
+```
+
+Files created at runtime and ignored by git: `life_list.json`, `facts_cache.json`, `notes_cache.json`, `predictions.csv`.
+
+## Adding facts for a bird
+
+Add an entry to `facts.json`, using the scientific name exactly as shown on the result card:
+
+```json
+"Passer domesticus": {
+  "appearance": "Males have a grey crown and a black bib. Females are plain brown and buff.",
+  "sound": "A simple, repeated cheeping and chirping, often from groups near buildings.",
+  "fun_fact": "House Sparrows live close to people and nest in gaps in walls and roofs."
+}
+```
+
+Cached notes update on their own the next time that bird is heard.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `Ollama isn't running` or `connection refused` on port 11434 | Start Ollama with `ollama serve`, or open the Ollama app, then try again |
+| The model download stops partway | Run the command again. The download retries automatically, and a slow connection can take about 20 minutes |
+| `An attempt has been made to start a new process before the current process has finished its bootstrapping phase` | On Windows, BirdNET starts worker processes that re-import your script. Keep all code under `if __name__ == "__main__":` (already done in this repo) |
+| PowerShell blocks `Activate.ps1` | Run `Set-ExecutionPolicy -Scope Process Bypass`, then activate again |
+| "No bird heard clearly" | The clip may be too short, too quiet, or too noisy. Try a closer, cleaner recording |
+| `.m4a` file not accepted | Convert it to WAV or MP3 first |
+| An old note still shows after editing `facts.json` | It should refresh by itself. If not, delete `notes_cache.json` and restart |
+| Git shows `life_list.json` or `predictions.csv` as untracked | Check that `.gitignore` is saved as UTF-8 and lists them |
+
+## Limitations
+
+- **Noise matters.** Traffic, wind, and several birds at once reduce accuracy. A confidence score is the model's estimate, not a guarantee.
+- **Only one bird is reported per clip**, the most-detected one.
+- **Only a few species have hand-written facts.** Others fall back to Wikipedia, which is general and can be wrong.
+- **Small model.** Gemma 3 4B follows instructions well when given facts, but it should not be trusted to recall them.
+- **Not field-tested yet.** I developed and tested with existing recordings. A real outdoor test is the next step.
+- **Audio formats.** `.m4a` phone recordings are not supported.
+- **Non-commercial models.** The BirdNET model weights carry a non-commercial license. Check the [BirdNET repository](https://github.com/birdnet-team/birdnet) for exact terms before using this commercially.
+
+## Roadmap
+
+- Record directly in the browser
+- Upload several clips at once and list every species found
+- Warn on low-confidence results
+- Convert `.m4a` automatically
+- Log the place and time of each sighting
+- Weekly goals such as "hear 5 species this week"
+- More hand-verified species
+
+## Credits
+
+Test recordings are from [xeno-canto](https://xeno-canto.org) and are **not** included in this repository. Please see each page for its license.
+
+- Asian Koel, [XC743612](https://xeno-canto.org/743612), Sathyan Meppayur
+- Common Myna, [XC157876](https://xeno-canto.org/157876), Rajgopal Patil
+- Indian Robin, [XC507730](https://xeno-canto.org/507730), Jean Roché
+
+<!-- Add credits for any other clips you used, for example the House Sparrow clip. -->
+
+Thanks to the [BirdNET team](https://birdnet.cornell.edu/) at the Cornell Lab of Ornithology and Chemnitz University of Technology, the Gemma team, and the Ollama project.
+
+## License
+
+The code in this repository is released under the MIT License. Third-party models and recordings keep their own licenses, as noted above.
+
+## DEV post
+
+<!-- Add the link to your DEV submission post here after publishing. -->

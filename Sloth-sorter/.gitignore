@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.sloth_undo.json
+node_modules/
+.next/
+.env*.local

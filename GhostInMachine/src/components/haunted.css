@@ -1,0 +1,405 @@
+/* ==========================================================================
+   HauntedTerminal Scoped Styles (Full-Screen Offline CRT Overlay)
+   High-legibility bright phosphor palette + layered atmospheric effects
+   ========================================================================== */
+
+.ht-overlay-root {
+  --ht-phosphor: #7dff8a;
+  --ht-phosphor-bright: #b8ffc2;
+  --ht-phosphor-dim: rgba(125, 255, 138, 0.78);
+  --ht-phosphor-glow: rgba(125, 255, 138, 0.6);
+  --ht-border: rgba(125, 255, 138, 0.36);
+  --ht-amber: #ffca63;
+  --ht-red: #ff8590;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background-color: #020302;
+  color: var(--ht-phosphor);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Courier New", monospace;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  animation: htColdEntryGlitch 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ht-overlay-root[data-phosphor="amber"] {
+  --ht-phosphor: #ffca63;
+  --ht-phosphor-bright: #ffe2a3;
+  --ht-phosphor-dim: rgba(255, 202, 99, 0.8);
+  --ht-phosphor-glow: rgba(255, 202, 99, 0.58);
+  --ht-border: rgba(255, 202, 99, 0.38);
+}
+
+@media (max-width: 640px) {
+  .ht-overlay-root {
+    padding: 0;
+  }
+}
+
+/* Cold blue-green entry glitch when switching Haunted Mode ON (clamped >= 72% brightness/opacity) */
+@keyframes htColdEntryGlitch {
+  0% {
+    opacity: 0.72;
+    filter: hue-rotate(-55deg) brightness(1.45) contrast(1.25);
+    transform: scale(1.01) skewX(-1.2deg);
+  }
+  35% {
+    opacity: 0.92;
+    filter: hue-rotate(-28deg) saturate(1.35);
+    transform: scale(0.997) skewX(0.8deg);
+  }
+  70% {
+    opacity: 1;
+    filter: hue-rotate(-10deg);
+    transform: scale(1) skewX(0deg);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+.ht-crt-shell {
+  position: relative;
+  width: 100%;
+  max-width: 1380px;
+  height: 100%;
+  background: radial-gradient(ellipse at 50% 44%, #09130c 0%, #040705 70%, #020302 100%);
+  border: 1px solid var(--ht-border);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 0 60px rgba(0, 0, 0, 0.75),
+    0 0 42px rgba(0, 0, 0, 0.95);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: perspective(1200px) rotateX(0.28deg);
+}
+
+@media (max-width: 640px) {
+  .ht-crt-shell {
+    border-radius: 0;
+    border: none;
+    transform: none;
+  }
+}
+
+/* Scanlines + subtle barrel vignette — reduced ~40% opacity & positioned BEHIND text layer (z-index: 5) */
+.ht-crt-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.16) 0px,
+      rgba(0, 0, 0, 0.16) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(circle at 50% 50%, transparent 62%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* Main terminal text styling: bright phosphor green + soft glow, full opacity */
+.ht-line-text {
+  color: var(--ht-phosphor);
+  opacity: 1;
+  text-shadow: 0 0 6px var(--ht-phosphor-glow);
+}
+
+/* System / boot lines: >= 75% opacity with clear contrast */
+.ht-line-system {
+  color: var(--ht-phosphor);
+  opacity: 0.78;
+  text-shadow: 0 0 4px rgba(125, 255, 138, 0.35);
+}
+
+/* User echoed input lines */
+.ht-line-user {
+  color: var(--ht-phosphor-bright);
+  opacity: 1;
+  text-shadow: 0 0 6px var(--ht-phosphor-glow);
+}
+
+/* Entity normal replies: full opacity bright phosphor */
+.ht-line-entity {
+  color: var(--ht-phosphor);
+  opacity: 1;
+  text-shadow: 0 0 6px var(--ht-phosphor-glow);
+}
+
+/* Entity quoted / creepy alert lines: slightly brighter & more luminous than standard/system lines */
+.ht-line-creepy {
+  color: #bfffc7;
+  opacity: 1;
+  text-shadow:
+    0 0 8px rgba(125, 255, 138, 0.8),
+    0 0 16px rgba(125, 255, 138, 0.35);
+}
+
+.ht-overlay-root[data-phosphor="amber"] .ht-line-creepy {
+  color: #ffe8b8;
+  text-shadow:
+    0 0 8px rgba(255, 202, 99, 0.8),
+    0 0 16px rgba(255, 202, 99, 0.35);
+}
+
+/* Phantom forged user lines */
+.ht-line-phantom {
+  color: #ffb8c0;
+  opacity: 0.95;
+  text-shadow: 0 0 7px rgba(255, 133, 144, 0.6);
+}
+
+/* Prompt input & placeholder high-visibility rules */
+.ht-prompt-input {
+  color: var(--ht-phosphor);
+  caret-color: var(--ht-phosphor);
+  text-shadow: 0 0 6px var(--ht-phosphor-glow);
+  opacity: 1;
+}
+
+.ht-prompt-input::placeholder {
+  color: var(--ht-phosphor);
+  opacity: 0.66;
+  text-shadow: none;
+}
+
+/* High-contrast Transmit CTA button */
+.ht-transmit-btn {
+  background-color: rgba(125, 255, 138, 0.18);
+  color: var(--ht-phosphor-bright);
+  border: 1px solid var(--ht-phosphor);
+  text-shadow: 0 0 5px rgba(125, 255, 138, 0.45);
+  font-weight: 600;
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.ht-transmit-btn:hover:not(:disabled),
+.ht-transmit-btn:focus-visible:not(:disabled) {
+  background-color: var(--ht-phosphor);
+  color: #030804;
+  text-shadow: none;
+  outline: none;
+}
+
+.ht-transmit-btn:disabled {
+  background-color: rgba(125, 255, 138, 0.08);
+  color: rgba(125, 255, 138, 0.68);
+  border-color: rgba(125, 255, 138, 0.42);
+  text-shadow: none;
+  cursor: not-allowed;
+}
+
+.ht-overlay-root[data-phosphor="amber"] .ht-transmit-btn {
+  background-color: rgba(255, 202, 99, 0.18);
+  border-color: var(--ht-phosphor);
+}
+
+.ht-overlay-root[data-phosphor="amber"] .ht-transmit-btn:hover:not(:disabled) {
+  background-color: var(--ht-phosphor);
+  color: #090602;
+}
+
+.ht-overlay-root[data-phosphor="amber"] .ht-transmit-btn:disabled {
+  background-color: rgba(255, 202, 99, 0.08);
+  color: rgba(255, 202, 99, 0.68);
+  border-color: rgba(255, 202, 99, 0.42);
+}
+
+/* Floating translucent ghost shapes in the dark background (behind text, pointer-events: none) */
+.ht-ghost-wisp {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(42px);
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(165, 243, 252, 0.12) 0%,
+    rgba(125, 255, 138, 0.04) 55%,
+    transparent 75%
+  );
+  will-change: transform, opacity;
+}
+
+.ht-ghost-wisp-1 {
+  width: 280px;
+  height: 340px;
+  top: 10%;
+  left: 7%;
+  animation: htGhostFloatA 28s ease-in-out infinite;
+}
+
+.ht-ghost-wisp-2 {
+  width: 330px;
+  height: 230px;
+  bottom: 14%;
+  right: 10%;
+  animation: htGhostFloatB 35s ease-in-out infinite;
+}
+
+.ht-ghost-wisp-3 {
+  width: 230px;
+  height: 300px;
+  top: 38%;
+  left: 42%;
+  animation: htGhostFloatA 39s ease-in-out infinite reverse;
+}
+
+@keyframes htGhostFloatA {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.22;
+  }
+  50% {
+    transform: translate3d(75px, -42px, 0) scale(1.12);
+    opacity: 0.4;
+  }
+}
+
+@keyframes htGhostFloatB {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.18;
+  }
+  50% {
+    transform: translate3d(-85px, -50px, 0) scale(1.15);
+    opacity: 0.34;
+  }
+}
+
+/* Film grain animation — strictly behind text layer (z-index: 6) and pointer-events: none */
+.ht-film-grain {
+  position: absolute;
+  inset: -15%;
+  width: 130%;
+  height: 130%;
+  pointer-events: none;
+  z-index: 6;
+  opacity: 0.032;
+  animation: htGrainShift 0.5s steps(2) infinite;
+}
+
+@keyframes htGrainShift {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(-1.5%, 1.5%); }
+  100% { transform: translate(1.5%, -1%); }
+}
+
+/* Horror Flicker & Shake Keyframes — clamped so opacity/brightness NEVER drops below 70% */
+@keyframes htFlicker {
+  0%, 100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+  25% {
+    opacity: 0.78;
+    filter: brightness(0.84);
+  }
+  55% {
+    opacity: 0.95;
+    filter: brightness(1.06);
+  }
+  80% {
+    opacity: 0.74;
+    filter: brightness(0.78);
+  }
+}
+
+@keyframes htShake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(-4px, 2px, 0); }
+  40% { transform: translate3d(4px, -3px, 0); }
+  60% { transform: translate3d(-3px, -2px, 0); }
+  80% { transform: translate3d(3px, 2px, 0); }
+}
+
+@keyframes htCursorBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes htWhisperFade {
+  0% { opacity: 0; transform: translateY(6px); }
+  20% { opacity: 0.28; }
+  80% { opacity: 0.18; }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+
+.ht-fx-flicker {
+  animation: htFlicker 0.22s linear;
+}
+
+.ht-fx-shake {
+  animation: htShake 0.28s ease-in-out;
+}
+
+.ht-fx-rgb .ht-line-text {
+  opacity: 1;
+  text-shadow:
+    -2px 0 rgba(255, 75, 95, 0.85),
+    2px 0 rgba(70, 230, 255, 0.85),
+    0 0 6px var(--ht-phosphor-glow);
+}
+
+.ht-cursor-block {
+  display: inline-block;
+  width: 9px;
+  height: 16px;
+  background-color: var(--ht-phosphor);
+  box-shadow: 0 0 8px var(--ht-phosphor-glow);
+  vertical-align: middle;
+  animation: htCursorBlink 1s steps(2) infinite;
+}
+
+.ht-whisper-item {
+  position: absolute;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 120, 132, 0.24);
+  text-shadow: 0 0 8px rgba(255, 71, 87, 0.28);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: htWhisperFade 4.2s ease-out forwards;
+}
+
+/* Gentle Mode: keep all text 100% crisp, bright, and free of motion/flicker */
+.ht-gentle-mode,
+.ht-gentle-mode .ht-crt-shell,
+.ht-gentle-mode .ht-film-grain,
+.ht-gentle-mode .ht-ghost-wisp,
+.ht-gentle-mode .ht-fx-flicker,
+.ht-gentle-mode .ht-fx-shake,
+.ht-gentle-mode .ht-whisper-item {
+  animation: none !important;
+  filter: brightness(1) !important;
+}
+
+.ht-gentle-mode .ht-line-text,
+.ht-gentle-mode .ht-line-entity,
+.ht-gentle-mode .ht-line-creepy,
+.ht-gentle-mode .ht-line-user {
+  opacity: 1 !important;
+  text-shadow: 0 0 6px var(--ht-phosphor-glow) !important;
+}
+
+.ht-gentle-mode .ht-line-system {
+  opacity: 0.88 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ht-overlay-root,
+  .ht-film-grain,
+  .ht-ghost-wisp,
+  .ht-fx-flicker,
+  .ht-fx-shake,
+  .ht-whisper-item {
+    animation: none !important;
+  }
+}
